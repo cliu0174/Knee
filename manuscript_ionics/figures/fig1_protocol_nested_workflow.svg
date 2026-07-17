@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN"
+  "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="506.677969pt" height="272pt" viewBox="0 0 506.677969 272" xmlns="http://www.w3.org/2000/svg" version="1.1">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-07-15T11:21:27.311772</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.9.2, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs>
+  <style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style>
+ </defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <path d="M 0 272 
+L 506.677969 272 
+L 506.677969 0 
+L 0 0 
+z
+" style="fill: #ffffff"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <path d="M 23.041155 175.1552 
+L 111.367595 175.1552 
+Q 118.56812 175.1552 118.56812 171.2912 
+L 118.56812 74.9488 
+Q 118.56812 71.0848 111.367595 71.0848 
+L 23.041155 71.0848 
+Q 15.84063 71.0848 15.84063 74.9488 
+L 15.84063 171.2912 
+Q 15.84063 175.1552 23.041155 175.1552 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #d9e2ec; stroke: #272727; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_3">
+    <path d="M 143.049905 175.1552 
+L 231.376345 175.1552 
+Q 238.57687 175.1552 238.57687 171.2912 
+L 238.57687 74.9488 
+Q 238.57687 71.0848 231.376345 71.0848 
+L 143.049905 71.0848 
+Q 135.84938 71.0848 135.84938 74.9488 
+L 135.84938 171.2912 
+Q 135.84938 175.1552 143.049905 175.1552 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #ddf3de; stroke: #272727; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_4">
+    <path d="M 263.058655 175.1552 
+L 351.385095 175.1552 
+Q 358.58562 175.1552 358.58562 171.2912 
+L 358.58562 74.9488 
+Q 358.58562 71.0848 351.385095 71.0848 
+L 263.058655 71.0848 
+Q 255.85813 71.0848 255.85813 74.9488 
+L 255.85813 171.2912 
+Q 255.85813 175.1552 263.058655 175.1552 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #e8dff2; stroke: #272727; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_5">
+    <path d="M 383.067405 175.1552 
+L 471.393845 175.1552 
+Q 478.59437 175.1552 478.59437 171.2912 
+L 478.59437 74.9488 
+Q 478.59437 71.0848 471.393845 71.0848 
+L 383.067405 71.0848 
+Q 375.86688 71.0848 375.86688 74.9488 
+L 375.86688 171.2912 
+Q 375.86688 175.1552 383.067405 175.1552 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #f6e7c8; stroke: #272727; stroke-width: 0.9; stroke-linejoin: miter"/>
+   </g>
+   <g id="patch_6">
+    <path d="M 119.609758 123.12 
+Q 127.208109 123.12 133.464818 123.12 
+" clip-path="url(#pbe31e1d108)" style="fill: none; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 128.664818 120.72 
+L 133.464818 123.12 
+L 128.664818 125.52 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #767676; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_7">
+    <path d="M 239.618508 123.12 
+Q 247.216859 123.12 253.473568 123.12 
+" clip-path="url(#pbe31e1d108)" style="fill: none; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 248.673568 120.72 
+L 253.473568 123.12 
+L 248.673568 125.52 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #767676; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_8">
+    <path d="M 359.627258 123.12 
+Q 367.225609 123.12 373.482318 123.12 
+" clip-path="url(#pbe31e1d108)" style="fill: none; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 368.682318 120.72 
+L 373.482318 123.12 
+L 368.682318 125.52 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #767676; stroke: #767676; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="patch_9">
+    <path d="M 427.230625 179.219066 
+Q 427.230625 195.249575 427.230625 209.938444 
+" clip-path="url(#pbe31e1d108)" style="fill: none; stroke: #b64342; stroke-width: 1.2; stroke-linecap: round"/>
+    <path d="M 429.630625 205.138444 
+L 427.230625 209.938444 
+L 424.830625 205.138444 
+z
+" clip-path="url(#pbe31e1d108)" style="fill: #b64342; stroke: #b64342; stroke-width: 1.2; stroke-linecap: round"/>
+   </g>
+   <g id="text_1">
+    <text style="font: 700 9px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle" x="67.204375" y="97.116969" transform="rotate(-0 67.204375 97.116969)">Corrected dataset</text>
+   </g>
+   <g id="text_2">
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(43.04125 125.599062)">124 LFP cells</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(39.86375 135.492125)">SOH correction</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(28.294375 145.385187)">piecewise knee labels</text>
+   </g>
+   <g id="text_3">
+    <text style="font: 700 9px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle" x="187.213125" y="97.116969" transform="rotate(-0 187.213125 97.116969)">Common cohort</text>
+   </g>
+   <g id="text_4">
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(154.084375 125.51775)">N50 / N100 / N150</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(149.6375 135.44525)">83 development cells</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(154.08625 145.37275)">40 secondary cells</text>
+   </g>
+   <g id="text_5">
+    <text style="font: 700 9px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle" x="307.221875" y="97.171812" transform="rotate(-0 307.221875 97.171812)">Strict development</text>
+   </g>
+   <g id="text_6">
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(283.765625 125.599062)">5-fold CV × 2</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(270.31375 135.492125)">selection inside folds</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(265.09125 145.385187)">selector + model choice</text>
+   </g>
+   <g id="text_7">
+    <text style="font: 700 9px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle" x="427.230625" y="97.116969" transform="rotate(-0 427.230625 97.116969)">Immutable freeze</text>
+   </g>
+   <g id="text_8">
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(387.425625 125.499969)">region-balanced top40</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(387.948125 135.521219)">14 regions; ET anchor</text>
+    <text style="font: 8px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(401.4375 145.508031)">30 fixed seeds</text>
+   </g>
+   <g id="text_9">
+    <text style="fill: #0f4d92; font: 700 10px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: middle" x="247.2175" y="32.96" transform="rotate(-0 247.2175 32.96)">Development labels drive every selection decision</text>
+   </g>
+   <g id="text_10">
+    <text style="fill: #b64342; font: 700 8.5px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(361.117891 236.692008)">Protocol-frozen batch evaluation</text>
+    <text style="fill: #b64342; font: 700 8.5px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif" transform="translate(354.983281 245.794711)">no formal model-development input</text>
+   </g>
+   <g id="text_11">
+    <text style="fill: #272727; font: 8.5px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start" x="21.60105" y="241.200195" transform="rotate(-0 21.60105 241.200195)">Historical anchor reproduced exactly: MAE 77.23 ± 0.89 cycles</text>
+   </g>
+   <g id="text_12">
+    <text style="fill: #767676; font: 7.5px 'Arial', 'DejaVu Sans', 'Liberation Sans', sans-serif; text-anchor: start" x="21.60105" y="258.069484" transform="rotate(-0 21.60105 258.069484)">No cell is split across folds; repeated seeds quantify algorithmic variation, not independent external cohorts.</text>
+   </g>
+  </g>
+ </g>
+ <defs>
+  <clipPath id="pbe31e1d108">
+   <rect x="7.2" y="7.2" width="480.035" height="257.6"/>
+  </clipPath>
+ </defs>
+</svg>

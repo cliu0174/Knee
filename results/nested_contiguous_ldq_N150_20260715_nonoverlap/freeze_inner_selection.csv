@@ -1,0 +1,5 @@
+outer_id,method,selector_config,model_id,inner_mae_mean,inner_mae_std,inner_mae_max,inner_rmse_mean,complexity_penalty,inner_selection_score
+full_development,region_balanced,"{""bootstrap_repeats"":40,""max_per_region"":2,""top_k"":40}",et_compact,47.98859137588499,13.875192105713674,81.32209860891714,72.2697309521022,0.9,58.40832044734807
+full_development,region_balanced,"{""bootstrap_repeats"":40,""max_per_region"":2,""top_k"":40}",et_formal_anchor,45.07973180754365,14.096016514736236,81.68086445525611,65.70755676077691,1.15,55.80741990454288
+full_development,region_balanced,"{""bootstrap_repeats"":40,""max_per_region"":3,""top_k"":40}",et_compact,45.6694919815601,10.330695366992712,57.9617024541535,70.15482775046654,0.9,53.398731763674725
+full_development,region_balanced,"{""bootstrap_repeats"":40,""max_per_region"":3,""top_k"":40}",et_formal_anchor,41.72147064429236,9.130112159645966,52.598353126126824,61.9325655695922,1.15,49.04431717286963

@@ -1,0 +1,17 @@
+{
+  "feature_path": "data/early_features_N150_local_deltaq_top40_20170630.csv",
+  "selected_candidate": "et_hpo_0000",
+  "selected_params": {
+    "n_estimators": 1200,
+    "max_features": 0.5,
+    "min_samples_leaf": 1,
+    "min_samples_split": 2,
+    "max_depth": 6.0,
+    "bootstrap": false
+  },
+  "n_splits": 5,
+  "n_repeats": 1,
+  "seed_repeats": 30,
+  "max_candidates": 30,
+  "note": "Hyperparameters are selected only on the development cohort. Secondary is external validation."
+}

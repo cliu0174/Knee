@@ -1,0 +1,48 @@
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+
+# IDE and operating-system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.dtmp
+
+# Local agent metadata, scratch space, and generated output
+.agents/
+tmp/
+output/
+archive/
+
+# Third-party source snapshots and local literature PDFs
+external/
+paper/
+
+# Raw battery data and large intermediate cycle tables
+data/severson_raw/
+data/*.mat
+data/*.pkl
+data/processed_cycles*.csv
+
+# Keep only the formal result sets used by the current manuscript
+results/*
+!results/baseline_uncertainty_region_stability_N150/
+!results/nested_ablation_learning_N150_20260715_nonoverlap/
+!results/nested_contiguous_ldq_N150_20260715_nonoverlap/
+!results/reproduction_ldq_et_N150_20260713/
+
+# LaTeX build products; retain main.pdf as the manuscript preview
+manuscript_ionics/tmp/
+manuscript_ionics/main.aux
+manuscript_ionics/main.bbl
+manuscript_ionics/main.blg
+manuscript_ionics/main.fdb_latexmk
+manuscript_ionics/main.fls
+manuscript_ionics/main.log
+manuscript_ionics/main.out

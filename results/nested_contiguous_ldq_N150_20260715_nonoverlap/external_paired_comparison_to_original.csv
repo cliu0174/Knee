@@ -1,0 +1,2 @@
+comparison,mean_paired_difference,bootstrap_ci_low,bootstrap_ci_high,sign_flip_p_value,n_cells
+frozen_new_minus_original_LDQ_ET_top40_abs_error,-0.6928986872764711,-4.090560268215729,3.307931172023502,0.7530493901219756,40

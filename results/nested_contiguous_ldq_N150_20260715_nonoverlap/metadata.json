@@ -1,0 +1,64 @@
+{
+  "phase": "development_only",
+  "created_utc": "2026-07-14T18:01:45.427867+00:00",
+  "feature_path": "data\\early_features_N150_local_deltaq_20170630.csv",
+  "feature_sha256": "a9c1860ee49233a1547bfc5009c83111d956904c227f7fc288c4413defc6c581",
+  "common_cohort_path": null,
+  "common_cohort_sha256": null,
+  "window_prefix": "N150",
+  "n_development": 83,
+  "n_base_features": 30,
+  "n_local_candidates": 365,
+  "methods": [
+    "pearson",
+    "bootstrap_stable",
+    "region_balanced",
+    "contiguous",
+    "mrmr"
+  ],
+  "outer_splits": 5,
+  "outer_repeats": 2,
+  "inner_splits": 3,
+  "inner_repeats": 1,
+  "bootstrap_repeats": 40,
+  "random_state": 20260713,
+  "predeclared_method_complexity_penalty": {
+    "pearson": 0.0,
+    "bootstrap_stable": 0.25,
+    "region_balanced": 0.5,
+    "contiguous": 0.75,
+    "mrmr": 0.5
+  },
+  "predeclared_model_grid": [
+    {
+      "model_id": "et_compact",
+      "n_estimators": 500,
+      "max_features": 0.5,
+      "min_samples_leaf": 2,
+      "min_samples_split": 2,
+      "max_depth": 6,
+      "bootstrap": false,
+      "complexity_penalty": 0.0
+    },
+    {
+      "model_id": "et_formal_anchor",
+      "n_estimators": 1200,
+      "max_features": 0.5,
+      "min_samples_leaf": 1,
+      "min_samples_split": 2,
+      "max_depth": 6,
+      "bootstrap": false,
+      "complexity_penalty": 0.25
+    }
+  ],
+  "predeclared_score": "mean_outer_MAE + 0.10*std_outer_MAE + 0.10*worst_outer_MAE + method_complexity_penalty",
+  "selected_method_by_development": "region_balanced",
+  "secondary_labels_read_for_selection": false,
+  "software_versions": {
+    "python": "3.12.7",
+    "numpy": "1.26.4",
+    "pandas": "2.2.2",
+    "scikit_learn": "1.5.1",
+    "platform": "Windows-11-10.0.26200-SP0"
+  }
+}

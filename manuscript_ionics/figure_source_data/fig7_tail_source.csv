@@ -1,0 +1,2 @@
+n,abs_error_median,abs_error_q80,abs_error_q90,abs_error_q95,abs_error_max,cells_over_100_cycles,cells_over_200_cycles
+40,43.81528803528322,108.61122159724708,190.61050513228105,265.1154426527537,376.1650572569205,10,3

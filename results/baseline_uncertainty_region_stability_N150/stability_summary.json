@@ -1,0 +1,12 @@
+{
+  "selection_scope": "official training cells only",
+  "n_training_cells": 41,
+  "candidate_local_features": 365,
+  "top_k": 40,
+  "bootstrap_repeats": 1000,
+  "jaccard_mean": 0.5993850599742773,
+  "jaccard_std": 0.23017549101028978,
+  "jaccard_median": 0.6326530612244898,
+  "full_top40_frequency_mean": 0.7192000000000001,
+  "full_top40_frequency_median": 0.7164999999999999
+}

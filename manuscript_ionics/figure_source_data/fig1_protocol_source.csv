@@ -1,0 +1,4 @@
+stage,cells,selection_labels,note
+source,124,False,corrected Severson release
+development,83,True,official train + primary
+secondary,40,False,protocol-frozen batch evaluation

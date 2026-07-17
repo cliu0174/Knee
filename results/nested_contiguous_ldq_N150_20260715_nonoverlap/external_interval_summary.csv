@@ -1,0 +1,5 @@
+stratum,n,nominal_coverage,empirical_coverage,mean_width,median_width,calibration_cells,calibration_quantile_level,calibration_half_width,status
+all,40,0.9,0.775,210.65241976310858,210.65241976310858,83,0.9156626506024096,105.32620988155429,cross-fitted residual interval; empirical diagnostic under possible batch shift
+early,13,0.9,0.8461538461538461,210.6524197631086,210.65241976310858,83,0.9156626506024096,105.32620988155429,post-hoc subgroup coverage; not a conditional coverage guarantee
+mid,13,0.9,0.8461538461538461,210.6524197631086,210.65241976310858,83,0.9156626506024096,105.32620988155429,post-hoc subgroup coverage; not a conditional coverage guarantee
+late,14,0.9,0.6428571428571429,210.6524197631086,210.65241976310858,83,0.9156626506024096,105.32620988155429,post-hoc subgroup coverage; not a conditional coverage guarantee

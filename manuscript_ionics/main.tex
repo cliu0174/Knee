@@ -6,17 +6,29 @@
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{array}
 \usepackage{tabularx}
-\usepackage{capt-of}
+\usepackage{capt-of} % retained for the grouped feature-definition table only
 \usepackage{placeins}
+\usepackage{booktabs}
+\usepackage{makecell}
+
+% Prefer natural top-of-page floats while retaining nearby body text.
+\setcounter{topnumber}{2}
+\setcounter{totalnumber}{3}
+\renewcommand{\topfraction}{0.95}
+\renewcommand{\bottomfraction}{0.95}
+\renewcommand{\textfraction}{0.08}
+\renewcommand{\floatpagefraction}{0.85}
+\setlength{\textfloatsep}{15pt plus 3pt minus 3pt}
+\setlength{\floatsep}{13pt plus 3pt minus 3pt}
 
 \raggedbottom
 
 \begin{document}
 
-\title[Region-balanced early battery knee prediction]{Region-balanced Local DeltaQ selection for reproducible early lithium-ion battery knee-point prediction under batch shift}
+\title[Stability-aware early battery knee prediction]{Stability-aware Local DeltaQ selection for early lithium-ion battery knee-point prediction under batch shift}
 
 % Author 1: Chang Liu (single affiliation: Southeast University, please replace with the real email)
-\author[1,2]{\fnm{Chang} \sur{Liu}}
+\author[1]{\fnm{Chang} \sur{Liu}}
 
 % Corresponding author: Prof. Congyan Chen (single affiliation: Southeast University, please replace with the real email)
 \author*[1]{\fnm{Congyan} \sur{Chen}}\email{chency@seu.edu.cn}
@@ -25,100 +37,104 @@
 \affil[1]{\orgdiv{School of Automation}, \orgname{Southeast University}, \orgaddress{\street{No.2 Sipailou}, \city{Nanjing}, \postcode{210096}, \country{China}}}
 
 % Affiliation 2: Monash University (only for Chang Liu)
-\affil[2]{\orgdiv{Faculty of Information Technology}, \orgname{Monash University}, \orgaddress{\city{Clayton}, \state{VIC}, \postcode{3800}, \country{Australia}}}
+% \affil[2]{\orgdiv{Faculty of Information Technology}, \orgname{Monash University}, \orgaddress{\city{Clayton}, \state{VIC}, \postcode{3800}, \country{Australia}}}
 
 \abstract{
-Capacity knee points mark the transition to accelerated battery degradation, making their early prediction valuable for proactive battery management. Yet informative changes in early discharge curves are subtle and may be distributed across multiple curve regions. Here, we develop a region-balanced Local DeltaQ--Extremely Randomized Trees (LDQ-ET) framework that captures localized curve changes while limiting feature concentration in any single region. Early discharge-capacity curves provided on a common 1000-point voltage grid were transformed into overlapping Local DeltaQ descriptors for region-balanced feature selection. The mean absolute errors (MAEs) were 43.01 and 76.59 cycles in within-cohort validation and cross-batch evaluation; regional controls supported distributed information, while repeated runs confirmed stable predictions and millisecond-scale inference. Together, these results show that region-balanced LDQ-ET provides a compact and reproducible approach to early knee-point prediction and a practical strategy for learning from localized degradation signals across batches.
+Capacity knee points mark the transition from gradual to accelerated lithium-ion battery degradation, making their early prediction important for lifetime warning and proactive battery management. However, early degradation signals are often weak and unevenly distributed along discharge curves, while selecting informative local descriptors can be unstable in small cohorts. We propose a stability-aware Local DeltaQ–ExtraTrees (LDQ-ET) framework for predicting absolute knee cycles from measurements within the first 150 cycles. Knee labels were constructed offline from full-life SOH trajectories, whereas localized descriptors were extracted from the cycle-150-minus-cycle-10 discharge-curve difference and selected using bootstrap stability. The selected descriptors were combined with raw capacity/SOH and Global DeltaQ features for ExtraTrees regression. The frozen model achieved MAEs of 38.23 and 64.15 cycles on the same-batch primary and secondary-batch cohorts, with corresponding $R^2$ values of 0.957 and 0.868. Input ablation further showed that Local DeltaQ substantially improved secondary-batch prediction beyond whole-curve summaries. Empirical reliability and label-sensitivity analyses indicated that the training-calibrated nominal 90\% prediction intervals achieved 95\% coverage in the same-batch primary cohort, while predictive performance remained broadly consistent across the piecewise-linear and chord-distance knee definitions. These results demonstrate the value of localized early discharge-curve information while revealing a measurable performance penalty under batch shift.
 }
 
-\keywords{Lithium-ion battery, knee point prediction, Local DeltaQ, nested cross-validation, batch shift, uncertainty calibration}
+\keywords{Lithium-ion battery, knee point prediction, Local DeltaQ, ExtraTrees, batch shift}
 
 \maketitle
 
 \section{Introduction}\label{sec:introduction}
 
-Capacity knee-point prediction is an early-warning problem rather than a generic lifetime-regression task. Lithium-ion cells can exhibit a long period of gradual fading before entering accelerated capacity loss, so a useful predictor must infer the future transition before knee behavior becomes observable. Such a capability would support charging control, maintenance planning, warranty decisions, and second-life screening. However, early discharge measurements contain only weak and spatially uneven precursors of the later transition. The predictive value of these subtle early-cycle curve differences was first demonstrated in battery-lifetime prediction by Severson et al. \cite{severson2019data}.
+Capacity knee-point prediction is an early-warning problem rather than a generic lifetime-regression task \cite{sohn2022twostage}. Because the knee marks the transition from gradual fading to accelerated capacity loss, anticipating its occurrence is important for proactive lifetime management. Lithium-ion cells can undergo a long period of gradual fading before accelerated capacity loss emerges, and the observed knee may reflect multiple internal-state trajectories and degradation pathways \cite{attia2022knees}. A useful predictor must therefore anticipate the transition before it becomes directly observable \cite{fermincueto2020kneepoint}. Such a capability could support charging control, maintenance planning, warranty decisions, and second-life screening \cite{hu2020prognostics, sulzer2021fielddata}. Early discharge measurements may contain only weak and nonuniform signatures of future degradation across the voltage range. Nevertheless, Severson et al. showed that subtle differences between early-cycle discharge curves contain useful information for battery lifetime prediction \cite{severson2019data}.
 
-Early-cycle battery prognosis has since shown that informative signals can support decisions before appreciable capacity loss occurs. Related measurements have guided closed-loop fast-charging optimization \cite{attia2020closed} and expanded the available signal space through impedance spectra and formation-stage $Q(V)$ curves \cite{zhang2020impedance,rhyu2025formation}. Temporal models further introduce signal decomposition and cycle-by-cycle updating \cite{qi2025hybrid,strange2023online}, while discharge-curve descriptors provide another route to machine-learning prediction \cite{jiang2023predicting}. Collectively, these studies establish the value of early measurements, although many representations summarize the discharge curve using global descriptors or optimize prediction for an overall lifetime target. For knee-point prediction, these findings motivate assessing the spatial distribution of predictive information along the discharge curve, rather than treating the curve as a single global response.
 
-Transfer-oriented models address a different but related challenge: maintaining predictive performance across cells, protocols, and operating conditions. Domain-adapted networks can estimate SOH without target-battery degradation labels, while physics-informed models improve prognosis across battery types and cycling protocols \cite{lu2023deepsoh,wang2024pinn}. Inter-cell models further extend lifetime prediction across protocols, temperatures, and chemistries \cite{zhang2025batlinet}. Degradation-informed features and domain-generalization models also address shifts in usage conditions and cell populations \cite{li2024varying,tan2024magnet}. These advances demonstrate that cross-condition robustness can be strengthened at the model and training levels, whereas spatial localization along the discharge curve represents a complementary feature-design objective.
+Building on this insight, extensive research has explored diverse diagnostic modalities to extract subtle prognostic signals prior to appreciable capacity loss. These include differential discharge characteristics, electrochemical impedance spectra, and formation-stage $Q(V)$ measurements \cite{jiang2023predicting,zhang2020impedance,rhyu2025formation}. Modern analytical pipelines integrate feature extraction, selection, and regression, while hybrid representations merge handcrafted and learned early-cycle features \cite{fei2021framework,roman2021pipeline,fei2022earlystage}. For early knee-cycle prediction, this motivates exploring how predictive information is localized across the discharge curve, as spatial details may be diluted or obscured by whole-curve summaries \cite{li2021oneshot, strange2021onecycle, paulson2022feature}.
 
-Knee-oriented studies bring the prediction target closer to the transition of practical interest. Relaxation-voltage models jointly predict the knee point and RUL \cite{fan2024relaxation}, history-free signals support degradation-stage assessment \cite{zhao2024historyfree}, and generative models forecast SOH trajectories together with knee points and end of life \cite{hu2025batterygpt}. In parallel, localized curve analyses relate differential-voltage structure and incremental-capacity features to battery health and knee behavior \cite{fuhrmann2024dva,wang2025ica}, while curvature-based analysis connects local curve shape with knee development \cite{yu2025knee}. Together, these findings motivate localized representations for early knee prediction. Nevertheless, predictive localization should be interpreted as a data-driven signal rather than a unique mechanistic assignment, because similar capacity and power fade can arise from different combinations of degradation modes \cite{li2025degradationmodes}.
+Against this background, recent studies have increasingly examined the onset of accelerated degradation in addition to conventional remaining-useful-life estimation. Relaxation-voltage approaches jointly estimate the knee point and remaining useful life, whereas history-free signals support degradation-stage assessment without long operating histories \cite{fan2024relaxation,zhao2024historyfree}. Generative models forecast SOH trajectories with knee and end-of-life quantities, while physics-guided learning incorporates knee information into full-trajectory prediction \cite{hu2025batterygpt,jia2024kneepoint}. Curve-level analyses based on differential voltage, incremental capacity, and local shape features further show the value of examining localized curve regions for knee-relevant representations \cite{fuhrmann2024dva,zheng2018icadva,wang2025ica,wang2024capacity,yu2025knee}. These data-driven associations provide an empirical complement to physics-based diagnostics \cite{birkl2017diagnostics,li2025degradationmodes}.
 
-Against this background, the central methodological problem is to select informative variables from an ordered and highly correlated discharge-curve representation. Local DeltaQ descriptors are naturally dependent because neighboring windows overlap, while the small cohort sizes typical of battery degradation datasets can make unconstrained feature ranking unstable. Existing selection principles provide relevant foundations. Fused lasso combines sparsity with smoothness across ordered coefficients, and stability selection uses resampling to improve the reliability of selected variables \cite{tibshirani2005fused,meinshausen2010stability}. Random-forest interval selection identifies informative domains in functional predictors \cite{servien2024interval}. Battery prognosis has also incorporated distribution-free SOH intervals and conformalized quantile ExtraTrees for SOH and RUL prediction \cite{pang2025distributionfree,sanches2026single}. A suitable Local DeltaQ selector should therefore respect curve ordering, limit feature concentration within any single Local DeltaQ region, support evaluation of concentrated versus distributed predictive information, and remain applicable as a frozen rule under batch shift.
+In parallel with knee-targeted modeling, ensuring prediction robustness under changing operating conditions has become increasingly important. Domain-adapted, physics-informed, and domain-generalization methods address shifts in cell populations, protocols, temperatures, and chemistries \cite{lu2023deepsoh,wang2024pinn,zhang2025batlinet,li2024varying,tan2024magnet}. These studies highlight distributional change as a central consideration in battery prognosis and motivate explicit evaluation beyond the development distribution. Within this broader context, spatially localized discharge-curve descriptors offer a complementary feature-level route for representing early degradation information.
 
-Here, we develop a region-balanced Local DeltaQ--Extremely Randomized Trees (LDQ-ET) framework for early absolute knee-cycle prediction. Unlike unconstrained local feature ranking, LDQ-ET uses region-balanced selection to limit dominance by any single high-scoring Local DeltaQ region and to support tests of distributed predictive information. Overlapping voltage-grid regions preserve localized discharge-curve changes, and selected Local DeltaQ descriptors are combined with raw capacity/SOH and global DeltaQ descriptors using a lightweight ExtraTrees readout. All data-dependent preprocessing, feature-selection, and model decisions are performed within nested training folds, after which the selected pipeline is frozen for cross-batch evaluation.
+The practical use of localized descriptors depends on how they are selected. Overlapping Local DeltaQ windows generate ordered and highly correlated candidates; with small cohorts, their rankings can be unstable, and the spatial distribution of the retained descriptors may vary substantially across resamples \cite{nogueira2018stability, kalousis2007stability}. Fused lasso couples adjacent coefficients to exploit ordering \cite{tibshirani2005fused}. Stability selection evaluates ranking reproducibility under resampling, whereas random-forest interval selection identifies informative domains in functional predictors \cite{meinshausen2010stability,servien2024interval}. Motivated by these principles, a remaining challenge is to select localized discharge-curve descriptors reproducibly in small cohorts and to assess whether the resulting frozen representation remains effective under batch shift.
+
+In this context, we develop a stability-aware Local DeltaQ--ExtraTrees (LDQ-ET) framework for prediction of the absolute knee cycle from early-life battery measurements. Knee labels are constructed from full-life SOH trajectories, whereas the predictor uses only information available in the prescribed early observation window. The framework represents localized changes in discharge curves through Local DeltaQ descriptors, supplements them with global curve summaries and raw capacity/SOH features, and compares selector families with different stability and structural principles. The selected representation is combined with an ExtraTrees regressor \cite{geurts2006extremely}, finalized on the training partition, and evaluated without modification on independent same-batch primary-test and secondary-batch test cohorts.
 
 The main contributions of this study are as follows:
 
 \begin{itemize}
 
-\item A Local DeltaQ representation is developed to preserve localized early discharge-curve changes, together with a region-balanced selection strategy that limits redundant feature concentration while retaining information from multiple overlapping regions.
+\item A Local DeltaQ representation is introduced to characterize the positional distribution of early discharge-curve changes. By combining overlapping local-region and morphology descriptors with raw capacity/SOH features and whole-curve Global DeltaQ statistics, it provides a complementary representation for early prediction of the absolute knee cycle.
 
-\item The representation is integrated with a lightweight ExtraTrees readout in a fold-safe LDQ-ET framework, in which feature-selection and model decisions are completed under nested validation before cross-batch evaluation.
+\item A stability-aware feature-selection strategy is developed for the ordered, overlapping, and highly correlated Local DeltaQ candidate pool. The strategy combines bootstrap selection frequency with association strength to identify a compact and reproducible subset of localized descriptors.
 
-\item A systematic evaluation examines observation budgets, data efficiency, feature groups, model families, regional contributions, prediction tails, uncertainty coverage, random-seed stability, and computational cost under matched experimental protocols.
+\item An integrated LDQ-ET framework is established by combining the selected early-cycle representation with an ExtraTrees regressor under a fixed 150-cycle observation boundary. The framework supports frozen same-batch and secondary-batch evaluation, together with analyses of observation-budget dependence, uncertainty calibration, and sensitivity to alternative knee-label definitions.
 
 \end{itemize}
 
-The remainder of this paper is organized as follows. Section~\ref{sec:data_features} describes the dataset, target construction, and early-cycle feature processing. Section~\ref{sec:model} formulates region-balanced Local DeltaQ selection and the LDQ-ET predictor. Section~\ref{sec:results} defines the evaluation protocol and reports the main comparisons, regional controls, and reliability analyses. Section~\ref{sec:conclusion} summarizes the findings, limitations, and next validation steps.
+The remainder of this paper is organized as follows. Section~\ref{sec:data_features} describes the dataset, target construction, and early-cycle feature processing. Section~\ref{sec:model} presents stability-aware Local DeltaQ selection and the LDQ-ET predictor. Section~\ref{sec:results} presents matched model comparisons, held-out predictive performance, interpretable descriptor patterns, early-observation performance, and robustness diagnostics. Finally, Section~\ref{sec:conclusion} concludes the paper by summarizing key findings, acknowledging limitations, and outlining future directions.
 
 % Section 2: Data processing
 
 \section{Data Processing}\label{sec:data_features}
 
-\subsection{Public battery aging dataset and cohort organization}\label{subsec:dataset}
+\subsection{Battery Dataset}\label{subsec:dataset}
 
-The experiments used the public Severson/MIT--Stanford battery aging dataset \cite{severson2019data}. It contains 124 commercial A123 APR18650M1A lithium iron phosphate/graphite cells with a nominal capacity of 1.1~Ah and a nominal voltage of 3.3~V. The cells were cycled at 30~$^{\circ}$C under 72 one- or two-step fast-charging policies from 0 to 80\% state of charge, followed by a common 1C constant-current--constant-voltage stage from 80 to 100\% state of charge and an identical 4C discharge to 2.0~V. These controlled but deliberately varied charging conditions produced the broad lifetime range needed to examine whether weak early-cycle changes anticipate a much later degradation transition.
+The experiments used the public Severson/MIT--Stanford battery aging dataset \cite{severson2019data}, which provides full-life cycling records for 124 commercial A123 APR18650M1A lithium iron phosphate/graphite cells with a nominal capacity of 1.1~Ah and a nominal voltage of 3.3~V. The cells were cycled at 30~$^{\circ}$C under 72 one- or two-step fast-charging policies from 0 to 80\% state of charge, followed by a common 1C constant-current--constant-voltage stage from 80 to 100\% state of charge and an identical 4C discharge to 2.0~V. The deliberately varied charging policies produced a broad range of degradation lifetimes while retaining a common cell chemistry, temperature, and discharge protocol. This setting allows early discharge-curve differences to be examined in relation to a later degradation transition. The eligibility criteria, cohort roles, and held-out evaluation protocol are specified in Section~\ref{subsec:experimental_design}.
 
-The official data partitions defined by Severson et al.~\cite{severson2019data} were retained. After knee labeling, one primary-test cell with $y_i=94$ was excluded because it did not satisfy the inclusion criterion $y_i>150$. The eligible cohort therefore contained 123 cells: 41 training cells and 42 primary-test cells were combined for model development, whereas all 40 secondary-test cells were reserved for protocol-frozen batch evaluation. No secondary-batch data were used to determine the feature selector, feature count, model family, hyperparameters, or fitted parameters; the complete LDQ-ET pipeline was specified exclusively using the development cohort. As summarized in Table~\ref{tab:dataset}, the secondary group had a knee distribution shifted towards later cycles, making it a useful batch-shift stress test.
+\subsection{SOH Preprocessing}\label{subsec:soh_preprocessing}
 
-\begin{table}[!h]
-\caption{Cell-level cohort used for knee-cycle prediction. Knee ranges are reported after applying the requirement $y_i>150$.}\label{tab:dataset}
-\centering
-\small
-\setlength{\tabcolsep}{3pt}
-\renewcommand{\arraystretch}{1.12}
-\begin{tabular}{@{}
->{\centering\arraybackslash}m{0.18\textwidth}
->{\centering\arraybackslash}m{0.13\textwidth}
->{\centering\arraybackslash}m{0.24\textwidth}
->{\raggedright\arraybackslash}m{0.37\textwidth}
-@{}}
-\toprule
-Official split & Cells used & Knee cycle, median [range] & Role in this study \\
-\midrule
-Train & 41 & 428 [221, 1624] & Development and nested CV \\
-Primary test & 42 & 429.5 [272, 1687] & Added to the development cohort \\
-Secondary test & 40 & 796.5 [377, 1523] & Secondary-batch evaluation \\
-\botrule
-\end{tabular}
-\end{table}
-\vspace{-1.0em}
-
-Cells, rather than individual cycles, were treated as the statistical units, and all splits were made at the cell level to prevent within-cell leakage between training and validation folds.
-
-\subsection{SOH construction and knee-point labeling}\label{subsec:knee_label}
-
-For cell $i$, let $Q_{i,t}^{\mathrm{d}}$ denote the measured discharge capacity at physical cycle $t$. The ordered set $\mathcal{C}_i=(c_{i,1},\ldots,c_{i,n_i^{\mathrm{life}}})$ contains the physical cycle numbers having finite positive capacity over the complete trajectory. To reduce sensitivity to a single initialization measurement, the reference capacity was defined as the mean of the first $K=5$ valid capacities,
+The full-life SOH trajectory was processed offline only to construct the knee label and was not used as a predictor input. For cell $i$, let $Q_{i,t}^{\mathrm{d}}$ denote the measured discharge capacity at physical cycle $t$. The ordered sequence $\mathcal{C}_i=(c_{i,1},\ldots,c_{i,n_i^{\mathrm{life}}})$ contains the physical cycle numbers having finite positive capacity over the complete trajectory. To reduce sensitivity to a single initialization measurement, the reference capacity was defined as the mean of the first $K=5$ valid capacities:
 \begin{equation}
 Q_{i,\mathrm{ref}}^{\mathrm{d}}=\frac{1}{K}\sum_{k=1}^{K}Q_{i,c_{i,k}}^{\mathrm{d}},
-\qquad
+\label{eq:ref_capacity}
+\end{equation}
+The raw SOH at the $\ell$th valid observation was then defined as
+\begin{equation}
 s_i^{\mathrm{raw}}(c_{i,\ell})=
 \frac{Q_{i,c_{i,\ell}}^{\mathrm{d}}}{Q_{i,\mathrm{ref}}^{\mathrm{d}}},
 \quad \ell=1,\ldots,n_i^{\mathrm{life}}.
 \label{eq:raw_soh}
 \end{equation}
-Here, $s_i^{\mathrm{raw}}(c_{i,\ell})$ is the raw state of health (SOH) at the $\ell$th valid observation. The complete raw SOH trajectory was smoothed using a second-order Savitzky--Golay filter with a 21-observation window. A monotone non-increasing trajectory was then obtained by isotonic regression,
+The complete raw SOH trajectory was first smoothed using a second-order Savitzky--Golay filter with a 21-observation window \cite{savitzky1964smoothing}. The smoothed trajectory was then corrected to be monotone non-increasing by isotonic regression  \cite{best1990isotonic}:
 \begin{equation}
 \widetilde{\mathbf{s}}_i
 =\arg\min_{\mathbf{z}}\sum_{\ell=1}^{n_i^{\mathrm{life}}}
 \left[z_\ell-s_i^{\mathrm{SG}}(c_{i,\ell})\right]^2
 \quad \mathrm{subject\ to}\quad z_{\ell+1}\leq z_\ell,
 \end{equation}
-where $s_i^{\mathrm{SG}}(c_{i,\ell})$ is the smoothed trajectory and $\widetilde{s}_i(c_{i,\ell})=\widetilde{s}_{i,\ell}$. The valid cycle sequences were contiguous in the present dataset, but the notation distinguishes observation position $\ell$ from physical cycle number $c_{i,\ell}$. The Savitzky--Golay filter attenuates isolated measurement fluctuations, while isotonic regression provides a stable monotonic trend for offline target construction. These corrections were used only for target construction, whereas the predictor relied exclusively on uncorrected capacity/SOH and discharge-curve descriptors available within the early observation window.
+where $s_i^{\mathrm{SG}}(c_{i,\ell})$ is the Savitzky--Golay-smoothed trajectory and $\widetilde{s}_i(c_{i,\ell})=\widetilde{s}_{i,\ell}$.
 
-The knee cycle $y_i$ was defined by a two-segment least-squares model fitted against the physical cycle numbers. Candidate split positions were limited to 20--90\% of the valid trajectory and required at least 30 observations on both sides. Write $\widetilde{s}_{i,r}=\widetilde{s}_i(c_{i,r})$. For every admissible observation position $\ell\in\mathcal{L}_i$, separate linear models were fitted before and after the split, and the minimum-residual solution was selected:
+% \begin{figure}[!t]
+% \centering
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure1a.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure1b.png}
+% \end{minipage}
+% \caption{SOH preprocessing for a representative development cell. (a) SOH trajectories before and after smoothing and monotonicity correction. (b) Pointwise departures of the processed trajectories from the raw record.}
+% \label{fig:soh_preprocessing}
+% \end{figure}
+
+\begin{figure}[!t]
+\centering
+\includegraphics[width=\textwidth]{Figure1.png}
+\caption{SOH preprocessing for a representative development cell. (a) SOH trajectories before and after smoothing and monotonicity correction. (b) Pointwise differences between the raw SOH record and the SG-smoothed and monotonicity-corrected trajectories.}
+\label{fig:soh_preprocessing}
+\end{figure}
+
+\FloatBarrier
+
+Figure~\ref{fig:soh_preprocessing} shows that smoothing suppresses short-scale fluctuations while retaining the overall degradation profile, whereas monotonicity correction enforces a non-increasing processed SOH trajectory. The departure panel makes the magnitude and location of these preprocessing adjustments explicit for the representative cell. Together, these steps provide a stable full-life trajectory for offline knee-label construction. The processed full-life trajectory is not used as a predictor input, and the predictor uses only measurements from cycles 1--150.
+
+\subsection{Knee-Label Construction}\label{subsec:knee_label}
+
+The knee cycle $y_i$ was defined from the corrected SOH trajectory using a two-segment least-squares model fitted against physical cycle number. Candidate split positions were limited to 20--90\% of the valid trajectory and required at least 30 observations on each side. Writing $\widetilde{s}_{i,r}=\widetilde{s}_i(c_{i,r})$, separate linear models were fitted before and after every admissible observation position $\ell\in\mathcal{L}_i$, and the split with the minimum total residual sum of squares was selected:
 \begin{equation}
 \begin{aligned}
 \ell_i^*=\arg\min_{\ell\in\mathcal{L}_i}\Bigg\{&
@@ -128,32 +144,68 @@ The knee cycle $y_i$ was defined by a two-segment least-squares model fitted aga
 y_i&=c_{i,\ell_i^*}.
 \end{aligned}
 \end{equation}
-The boundary observation was assigned only to the first segment, so each trajectory observation contributed one residual to the piecewise objective. The two coefficient pairs were estimated independently, and no continuity or line-intersection constraint was imposed. A diagnostic fit-improvement score quantified the reduction in SSE relative to a single-line model,
+
+The target was the observed cycle with the minimum two-segment residual sum of squares. The split observation was assigned to the first segment, and the two segments were fitted independently.
+
+To assess dependence on the label definition, two deterministic alternatives were retained as sensitivity targets. The chord-distance label characterizes the knee as the largest geometric departure from the overall degradation trend. Physical cycle and corrected SOH were normalized to $[0,1]$, and a straight chord was drawn between the trajectory endpoints. The admissible observation with the maximum perpendicular distance from this chord was selected as the knee.
+
+The degradation-rate-threshold label instead identifies the onset of a sustained increase in capacity-fade rate. The negative numerical gradient of the corrected SOH trajectory was smoothed with an odd moving-average window of $\max(9,\operatorname{round}_{\mathrm{odd}}(0.035n_i^{\mathrm{life}}))$ observations. Let $m_i$ denote the median smoothed rate before the lower admissible boundary and let $q_{0.90,i}$ denote the 90th percentile within the admissible interval. The cell-specific threshold was
 \begin{equation}
-C_i=\frac{\mathrm{SSE}_{i,\mathrm{single}}-\mathrm{SSE}_{i,\mathrm{piecewise}}}
-{\mathrm{SSE}_{i,\mathrm{single}}}.
+\tau_i=m_i+0.40\max\!\left(0,q_{0.90,i}-m_i\right).
 \end{equation}
-All 124 cells produced valid piecewise-linear labels. The score had a median of $0.9632$, an interquartile range of $0.9480$--$0.9721$, and an overall range of $0.7975$--$0.9879$. It was used only to audit the improvement achieved by the piecewise fit and did not enter cell selection, sample weighting, or prediction. Accordingly, the resulting knee cycle serves as a reproducible label of the degradation transition under the specified offline procedure; its interpretation is tied to this labeling rule rather than to a unique electrochemical event.
+The first admissible observation reaching $\tau_i$ was selected as the knee; if no crossing occurred, the admissible observation with the maximum smoothed rate was used. Both alternatives were constructed offline from the corrected full-life SOH trajectory and did not change the early-cycle predictor inputs.
 
-\subsection{Early-cycle observation constraint}\label{subsec:early_window}
+% \begin{figure}[t]
+% \centering
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2a.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2b.png}
+% \end{minipage}
 
-The observation horizon was fixed at the first $N=150$ cycles, and only cells satisfying $y_i>N$ were included. The supervised task is
-\begin{equation}
-\hat{y}_i=f_{\theta}\!\left(\mathcal{X}_{i,1:N}\right),
-\qquad N=150, \qquad y_i>N,
-\end{equation}
-where $\mathcal{X}_{i,1:N}$ contains measurements and derived descriptors available no later than the observation horizon. The target is the absolute knee cycle defined in Section~\ref{subsec:knee_label}, representing the timing of the labeled degradation transition. The full SOH trajectory was accessed only to construct $y_i$ for training and evaluation; no information after cycle 150 entered the predictor.
+% \vspace{0.35em}
 
-Figure~\ref{fig:knee_examples} illustrates this separation between observation and target generation. The shaded early-cycle region is the only information available to the model, whereas the dashed knee labels occur later in the trajectories. Thus, the prediction cannot be obtained by detecting an already visible knee within the input window.
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2c.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2d.png}
+% \end{minipage}
+
+% \vspace{0.35em}
+
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2e.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+% \includegraphics[width=\linewidth]{Figure2f.png}
+% \end{minipage}
+% \caption{Offline knee-label constructions for a representative development cell: (a) admissible split objective for the primary piecewise-linear label; (b) selected minimum-residual label; (c) admissible chord-distance objective; (d) normalized chord-distance geometry; (e) smoothed degradation rate, threshold, and first admissible crossing; and (f) the corresponding degradation-rate-threshold label on the corrected SOH trajectory.}
+% \label{fig:piecewise_knee_label}
+% \end{figure}
 
 \begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{figures/fig5_knee_examples.pdf}
-\caption{Representative SOH trajectories and piecewise-linear knee labels. The shaded region denotes the first 150 cycles available to the predictor, and dashed vertical lines denote the offline knee labels obtained from the complete trajectories.}
-\label{fig:knee_examples}
+\includegraphics[width=\textwidth]{Figure2.png}
+\caption{Offline knee-label constructions for a representative development cell: (a) admissible split objective for the primary piecewise-linear label; (b) selected minimum-residual label; (c) admissible chord-distance objective; (d) normalized chord-distance geometry; (e) smoothed degradation rate, threshold, and first admissible crossing; and (f) the corresponding degradation-rate-threshold label on the corrected SOH trajectory.}
+\label{fig:piecewise_knee_label}
 \end{figure}
 
-\subsection{Global and Local DeltaQ representations}\label{subsec:local_deltaq}
+\FloatBarrier
+
+Figure~\ref{fig:piecewise_knee_label} illustrates the three offline knee-label constructions for the same representative development cell. Panels (a) and (b) present the primary piecewise-linear construction. The fitting objective reaches a pronounced minimum at cycle 427, and the corresponding two-segment fit separates the gradual pre-knee decline from the subsequent accelerated degradation, yielding the primary label $y_i=427$. Panels (c) and (d) show that the chord-distance criterion reaches its maximum at cycle 405. By emphasizing the largest geometric departure from the chord connecting the trajectory endpoints, this criterion places the knee 22 cycles earlier. Panels (e) and (f) show that the degradation-rate threshold is first crossed at cycle 427, coinciding with the primary label for this cell. 
+
+The three constructions therefore characterize related but distinct aspects of the degradation trajectory. The piecewise-linear minimum-residual rule was adopted as the primary label because it directly compares the degradation regimes before and after each admissible split on the physical-cycle scale. The other two definitions were retained as complementary sensitivity targets, and their cohort-level agreement and predictor-level effects are evaluated in Section~4.6.
+
+\subsection{Localized DeltaQ Representations}
+\label{subsec:local_deltaq}
 
 \begingroup
 \setlength{\abovedisplayskip}{7pt plus 2pt minus 2pt}
@@ -161,399 +213,721 @@ Figure~\ref{fig:knee_examples} illustrates this separation between observation a
 \setlength{\abovedisplayshortskip}{5pt plus 2pt minus 1pt}
 \setlength{\belowdisplayshortskip}{5pt plus 2pt minus 1pt}
 
-\noindent\textit{Difference response.} Early capacity loss alone can be small even when the shape of the discharge response has begun to change. The public dataset provides each linearly interpolated discharge-capacity curve $Q_{d,\mathrm{lin}}$ on the same descending voltage grid,
+we next constructed early-cycle representations exclusively from measurements available within the first $N=150$ cycles. The cycle-10-to-150 discharge-curve difference was used to construct overlapping local-region and morphology representations that retained the positional distribution of early curve changes.
+
+\noindent\textit{Early-cycle difference response.}
+Early capacity loss can remain small after the shape of the discharge response begins to change. The public dataset provides each linearly interpolated discharge-capacity curve $Q_{d,\mathrm{lin}}$ on the same descending voltage
+grid,
 \begin{equation}
-v_r=3.5-\frac{1.5r}{L-1}\ \mathrm{V},
-\qquad r=0,\ldots,L-1,\qquad L=1000.
+v_r
+=
+3.5-\frac{1.5r}{L-1}\ \mathrm{V},
+\qquad
+r=0,\ldots,L-1,
+\qquad
+L=1000.
 \end{equation}
+
 For convenient normalized positional indexing, we define the discharge-position coordinate
 \begin{equation}
-u_r=\frac{3.5-v_r}{1.5}=\frac{r}{L-1}\in[0,1],
+u_r
+=
+\frac{3.5-v_r}{1.5}
+=
+\frac{r}{L-1}
+\in[0,1],
 \end{equation}
-so that $u=0$ and $u=1$ correspond to 3.5 and 2.0~V, respectively. Let $q_i^{[k]}(u_r)$ denote the $Q_{d,\mathrm{lin}}$ curve stored at zero-based index $k$ for cell $i$. The early-cycle difference response was
+so that $u=0$ and $u=1$ correspond to 3.5 and 2.0~V, respectively. Let $q_i^{(c)}(u_r)$ denote the $Q_{d,\mathrm{lin}}$ curve at physical cycle $c$ for cell $i$, where physical cycle $c$ corresponds to zero-based
+array index $c-1$. The early-cycle difference response was defined as
 \begin{equation}
-\Delta q_i(u_r)=q_i^{[149]}(u_r)-q_i^{[9]}(u_r),
-\qquad r=0,\ldots,L-1,
-\end{equation}
-where stored indices 9 and 149 correspond to physical cycles 10 and 150. This pair retained the Severson-style cycle-10 reference, used the final available cycle, and was fixed before model comparison \cite{severson2019data}. Because all $Q_{d,\mathrm{lin}}$ inputs shared the same 1000-point voltage grid, the curves were differenced pointwise without further interpolation.
-
-\noindent\textit{Global descriptors.} The global DeltaQ representation comprised the mean, sample standard deviation, population variance, $\log_{10}(v_{\Delta q}+10^{-12})$, minimum, maximum, bias-corrected sample skewness, and bias-corrected Fisher excess kurtosis. The related scale encodings were retained to reproduce the prespecified feature pipeline. These descriptors summarize overall shift, dispersion, asymmetry, and tail shape \cite{severson2019data,jiang2023predicting}, but do not identify where along the discharge coordinate a change occurs.
-
-\noindent\textit{Regional descriptors.} Local DeltaQ addresses this limitation by preserving the ordering of the interpolated curve. The response was partitioned into overlapping regions of width $W=50$ grid points and stride $H=25$,
-\begin{equation}
-\begin{aligned}
-\Omega_m&=\{u_{(m-1)H},\ldots,u_{(m-1)H+W-1}\},
-&&m=1,\ldots,M,\\
-M&=1+\left\lfloor\frac{L-W}{H}\right\rfloor=39.
-\end{aligned}
-\end{equation}
-The 50\% overlap reduces sensitivity to an arbitrary hard boundary: a localized change near the edge of one region remains represented in its neighbor. For each $\Omega_m$, nine descriptors were calculated,
-\begin{equation}
-\boldsymbol{\phi}_{i,m}=
-\left[\mu,s,v,\mu_{|\cdot|},\min,\max,R,\beta,E\right]_{i,m},
-\end{equation}
-where $\mu$ is the local mean, $s$ the sample standard deviation, $v$ the population variance, $\mu_{|\cdot|}$ the mean absolute response, $R$ the range, $\beta$ the least-squares slope over the local grid index, and $E=W^{-1}\sum_{u_r\in\Omega_m}\Delta q_i(u_r)^2$ the local energy. Both scale encodings $s$ and $v$ were retained to reproduce the prespecified candidate dictionary; feature inclusion was determined within each training fold.
-
-\newpage
-\noindent\textit{Matrix-profile descriptors.} The regional dictionary contained 351 descriptors. Whereas these statistics summarize predefined Local DeltaQ regions independently, matrix-profile features compare a denser set of sliding subsequences to characterize recurrent and atypical local shapes. Fourteen auxiliary morphology descriptors were extracted from the complete DeltaQ response \cite{yeh2016matrix}. The raw subsequences and the corresponding number of sliding positions were defined as
-\begin{equation}
-\mathbf{s}_{i,j}
-=\left[\Delta q_i(u_{jh}),\ldots,
-\Delta q_i(u_{jh+w_{\mathrm{mp}}-1})\right]^{\mathsf T},
-\qquad j=0,\ldots,J-1,
-\end{equation}
-\begin{equation}
-J=1+\left\lfloor\frac{L-w_{\mathrm{mp}}}{h}\right\rfloor=96,
-\qquad w_{\mathrm{mp}}=50,\quad h=10.
-\end{equation}
-Each subsequence was independently z-normalized as
-\begin{equation}
-\widetilde{\mathbf{s}}_{i,j}
-=\frac{\mathbf{s}_{i,j}-\bar{s}_{i,j}\mathbf{1}}
-{\max(\sigma_{i,j},\epsilon)},
-\qquad \epsilon=10^{-12},
-\end{equation}
-where $\sigma_{i,j}$ is the population standard deviation. The profile value was then defined as
-\begin{equation}
-P_i(j)=\min_{\substack{k\in\{0,\ldots,J-1\}\\|k-j|>e}}
-\left\|\widetilde{\mathbf{s}}_{i,j}-\widetilde{\mathbf{s}}_{i,k}\right\|_2,
+\Delta q_i(u_r)
+=
+q_i^{(150)}(u_r)-q_i^{(10)}(u_r),
 \qquad
-e=\left\lceil\frac{w_{\mathrm{mp}}}{2h}\right\rceil=3,
+r=0,\ldots,L-1.
 \end{equation}
-With $w_{\mathrm{mp}}=50$ and $h=10$, the exclusion radius $e=3$ removes candidate matches satisfying $|k-j|\leq3$, corresponding to start-position separations of at most 30 grid points. This exclusion prevents self-matching and matching with strongly overlapping neighboring subsequences; overlaps beyond this radius remain admissible.
 
-The motif and discord indices and their normalized positions were
+Cycle 10 was selected as the reference following Severson et al.~\cite{severson2019data}, whereas cycle 150 marked the end of the prescribed observation window. These two cycles were used consistently throughout the model comparisons. Because all $Q_{d,\mathrm{lin}}$ inputs shared the same 1000-point voltage grid, the curves were differenced pointwise. The coordinate $u_r$ re-indexes this grid without resampling the curves.
+
+\noindent\textit{Local-region descriptors.}
+Local DeltaQ retained positional structure along the discharge coordinate by partitioning the difference response into overlapping regions of width $W=50$ grid points and stride $H=25$,
 \begin{equation}
 \begin{aligned}
-j_i^{\mathrm{motif}}&=\arg\min_jP_i(j),
-&p_i^{\mathrm{motif}}&=\frac{j_i^{\mathrm{motif}}h}{L-w_{\mathrm{mp}}},\\
-j_i^{\mathrm{discord}}&=\arg\max_jP_i(j),
-&p_i^{\mathrm{discord}}&=\frac{j_i^{\mathrm{discord}}h}{L-w_{\mathrm{mp}}}.
+\Omega_m
+&=
+\left\{
+u_{(m-1)H},
+\ldots,
+u_{(m-1)H+W-1}
+\right\},
+&&
+m=1,\ldots,M,\\
+M
+&=
+1+\left\lfloor\frac{L-W}{H}\right\rfloor
+=
+39.
 \end{aligned}
 \end{equation}
-The 14 morphology descriptors comprised six summaries of $P_i$ (minimum, mean, sample standard deviation, 90th percentile, 95th percentile, and maximum), the two normalized positions, and the mean, sample standard deviation, and slope of each corresponding raw DeltaQ subsequence. Z-normalization was used only for profile distances; motif and discord summaries retained their original amplitudes. Together with the 351 regional descriptors, these features formed a 365-descriptor Local DeltaQ candidate pool. Any descriptor repeatedly selected across training folds should be interpreted as a predictive association under the present data and labeling protocol, not as evidence for a unique electrochemical mechanism.
+
+The 50\% overlap allows a localized change near one region boundary to remain represented in the neighboring region. For each $\Omega_m$, eight descriptors were calculated,
+\begin{equation}
+\boldsymbol{\phi}_{i,m}
+=
+\left[
+\mu_{i,m},
+s_{i,m},
+\mu^{\mathrm{abs}}_{i,m},
+\Delta q^{\min}_{i,m},
+\Delta q^{\max}_{i,m},
+R_{i,m},
+\beta_{i,m},
+E_{i,m}
+\right],
+\end{equation}
+where the entries denote the local mean, sample standard deviation, mean absolute response, minimum, maximum, range, least-squares slope, and energy, respectively. The energy descriptor was defined as
+\begin{equation}
+E_{i,m}
+=
+\frac{1}{W}
+\sum_{u_r\in\Omega_m}
+\Delta q_i(u_r)^2.
+\end{equation}
+These descriptors formed the prespecified local candidate dictionary.
+
+\noindent\textit{Morphology descriptors.}
+The 39 local regions yielded $39\times8=312$ descriptors. Fourteen additional matrix-profile-inspired descriptors summarized recurrent and atypical shapes from 50-point subsequences extracted with a stride of 10 \cite{yeh2016matrix}. Together, the 312 local-region descriptors and 14 morphology descriptors formed a 326-dimensional localized DeltaQ candidate pool.
 
 \endgroup
 
-\newpage
-\subsection{Feature assembly and processing controls}\label{subsec:feature_assembly}
 
-Three complementary feature groups were carried forward. The first comprised 22 raw capacity/SOH descriptors calculated over the ordered valid early-cycle set $\mathcal{V}_i=(t_{i,1},\ldots,t_{i,n_i^{(150)}})$, where $t\leq150$ and $Q_{i,t}^{\mathrm d}$ is finite and positive. Write $q_{i,\ell}=Q_{i,t_{i,\ell}}^{\mathrm d}$ and $s_{i,\ell}=s_i^{\mathrm{raw}}(t_{i,\ell})$. For either sequence $x=(x_1,\ldots,x_n)$, the mean and sample standard deviation were
-\begin{equation}
-\bar{x}=\frac{1}{n}\sum_{\ell=1}^{n}x_\ell,
+\subsection{Feature Dictionary}
+\label{subsec:feature_assembly}
+
+The fixed feature block comprised 30 descriptors: 22 calculated from valid discharge-capacity and raw-SOH observations within the first 150 cycles, and eight Global DeltaQ whole-curve statistics calculated from the cycle-150 minus cycle-10 difference response.
+
+For cell $i$, let
+\[
+\mathcal{V}_i
+=
+\left(
+t_{i,1},
+\ldots,
+t_{i,n_i^{(150)}}
+\right)
+\]
+denote the ordered sequence of physical cycle numbers satisfying $t_{i,\ell}\leq150$ for which $Q_{i,t_{i,\ell}}^{\mathrm d}$ is finite and positive. Define
+\[
+q_{i,\ell}
+=
+Q_{i,t_{i,\ell}}^{\mathrm d},
 \qquad
-\operatorname{sd}(x)=\sqrt{\frac{1}{n-1}\sum_{\ell=1}^{n}(x_\ell-\bar{x})^2}.
-\end{equation}
-The first-to-last change was $\Delta x=x_n-x_1$, rather than a fitted trend. Only the raw-SOH slope and intercept were obtained by ordinary least squares,
-\begin{equation}
-(\widehat{\beta}_s,\widehat{\alpha}_s)
-=\arg\min_{\beta,\alpha}\sum_{\ell=1}^{n_i^{(150)}}
-\left(s_{i,\ell}-\beta t_{i,\ell}-\alpha\right)^2.
-\end{equation}
-For regeneration descriptors, let $d_{i,\ell}=s_{i,\ell+1}-s_{i,\ell}$ and $\delta=10^{-4}$. The count, cumulative amplitude, and largest adjacent-observation increase were $\sum_\ell\mathbb{I}(d_{i,\ell}>\delta)$, $\sum_{\ell:d_{i,\ell}>\delta}d_{i,\ell}$, and $\max(\{d_{i,\ell}:d_{i,\ell}>\delta\}\cup\{0\})$, respectively. The fixed threshold was treated as a numerical tolerance for excluding negligible fluctuations between consecutive valid observations; it was held constant throughout feature extraction and was not included among the target-optimized hyperparameters. Table~\ref{tab:raw_feature_definitions} gives the complete grouped definition of the 22 descriptors.
+s_{i,\ell}
+=
+s_i^{\mathrm{raw}}(t_{i,\ell}).
+\]
 
-\begin{center}
-\begin{minipage}{\textwidth}
-\captionof{table}{Grouped definitions of the 22 early-cycle capacity/SOH descriptors. All statistics were calculated from valid observations at $t\leq150$.}
-\label{tab:raw_feature_definitions}
+The sample standard deviation was calculated using the $n_i^{(150)}-1$ denominator. For $x\in\{q,s\}$, the first-to-last change was defined as
+\[
+\Delta x_i
+=
+x_{i,n_i^{(150)}}-x_{i,1}.
+\]
+The raw-SOH slope and intercept were obtained by ordinary least-squares regression against physical cycle number.
+
+For the positive-increment descriptors, let
+\[
+d_{i,\ell}
+=
+s_{i,\ell+1}-s_{i,\ell},
+\qquad
+\ell=1,\ldots,n_i^{(150)}-1,
+\]
+and set $\delta=10^{-4}$. The number, cumulative amplitude, and maximum amplitude of positive increments were defined as
+\[
+\sum_{\ell=1}^{n_i^{(150)}-1}
+\mathbb{I}(d_{i,\ell}>\delta),
+\qquad
+\sum_{\ell:d_{i,\ell}>\delta}d_{i,\ell},
+\]
+and
+\[
+\max\left(
+\{d_{i,\ell}:d_{i,\ell}>\delta\}
+\cup
+\{0\}
+\right),
+\]
+respectively. The tolerance $\delta=10^{-4}$ corresponds to 0.01 percentage points of SOH.
+
+The eight Global DeltaQ descriptors were calculated over the complete cycle-150 minus cycle-10 difference response $\Delta q_i(u_r)$. They comprised the mean, sample standard deviation, minimum, maximum, range, mean absolute response, skewness, and kurtosis. The capacity/SOH descriptors were derived from valid observations at $t\leq150$, whereas the Global DeltaQ descriptors summarized the complete difference response. The resulting 30 fixed descriptors are listed in Table~\ref{tab:fixed_feature_definitions}.
+
+\begin{table}[!htbp]
+\centering
+\caption{Grouped definitions of the 30 fixed early-cycle descriptors.}
+\label{tab:fixed_feature_definitions}
 \small
-\renewcommand{\arraystretch}{1.0}
+\renewcommand{\arraystretch}{1.08}
 \setlength{\tabcolsep}{5pt}
-\begin{tabularx}{\textwidth}{@{}>{\centering\arraybackslash}m{0.20\textwidth}>{\raggedright\arraybackslash}X@{}}
-\toprule
-Group (count) & Included descriptors \\
-\midrule
-Availability (1) & Number of valid observations, $n_i^{(150)}=|\mathcal{V}_i|$. \\[4pt]
-Capacity (9) & Mean, sample standard deviation, minimum, maximum, first value, last value, range, last--first change, and last/first ratio. \\[4pt]
-Raw SOH (9) & Mean, sample standard deviation, minimum, maximum, first value, last value, last--first change, and OLS slope and intercept. \\[4pt]
-Regeneration (3) & Number, cumulative amplitude, and maximum of increases between adjacent valid SOH observations exceeding $\delta=10^{-4}$. \\
-\botrule
-\end{tabularx}
-\end{minipage}
-\end{center}
 
-The second group contained eight global DeltaQ descriptors summarizing the full early difference curve. The third contained all 365 Local DeltaQ candidates retaining either local position or whole-curve morphology. Before supervised selection, the unfiltered feature dictionary can be written as
+\begin{tabularx}{\textwidth}{
+@{}
+>{\centering\arraybackslash}m{0.20\textwidth}
+>{\raggedright\arraybackslash}X
+@{}
+}
+\toprule
+\textbf{Group (count)} & \textbf{Included descriptors} \\
+\midrule
+
+Availability (1) & Number of valid observations, $n_i^{(150)}=|\mathcal{V}_i|$.
+\\[4pt]
+
+Capacity (9) & Mean, sample standard deviation, minimum, maximum, first value, last value, range, last--first change, and last/first ratio.
+\\[4pt]
+
+Raw SOH (9) & Mean, sample standard deviation, minimum, maximum, first value, last value, last--first change, and OLS slope and intercept.
+\\[4pt]
+
+Positive increments (3) & Number, cumulative amplitude, and maximum amplitude of increases between adjacent valid SOH observations exceeding $\delta=10^{-4}$.
+\\[4pt]
+
+Global DeltaQ (8) & Mean, sample standard deviation, minimum, maximum, range, mean absolute response, skewness, and kurtosis of the cycle-150 minus cycle-10 difference response.
+\\
+
+\bottomrule
+\end{tabularx}
+\end{table}
+
+The complete unfiltered feature dictionary therefore comprised 30 fixed descriptors and 326 localized DeltaQ candidates:
 \begin{equation}
-\mathbf{z}_i=
-\left[\mathbf{z}_i^{\mathrm{raw/SOH}},
-\mathbf{z}_i^{\Delta Q},
-\boldsymbol{\Phi}_i^{\mathrm{LDQ}}\right]
-\in\mathbb{R}^{22+8+365}.
+\mathbf{z}_i
+=
+\left[
+\mathbf{z}_i^{\mathrm{fixed}},
+\boldsymbol{\Phi}_i^{\mathrm{local/morph}}
+\right]
+\in\mathbb{R}^{356},
 \end{equation}
-All transformations defined in this section are deterministic and were applied independently to each cell. The following section specifies how the Local DeltaQ pool is selected within development training partitions and combined with the fixed feature groups before protocol freezing.
+where
+\[
+\mathbf{z}_i^{\mathrm{fixed}}
+=
+\left[
+\mathbf{z}_i^{\mathrm{raw/SOH}},
+\mathbf{z}_i^{\mathrm{global}\,\Delta Q}
+\right]
+\in\mathbb{R}^{30},
+\]
+and $\boldsymbol{\Phi}_i^{\mathrm{local/morph}}\in\mathbb{R}^{326}$ collects the local-region and morphology descriptors.
+
+The 30 fixed descriptors were retained without supervised feature selection, whereas the 326 localized DeltaQ candidates were subjected to training-fold eligibility screening and supervised selection before model fitting, as specified in Section~\ref{sec:model}.
 
 % Section 3: model
 
-\section{Methodology}\label{sec:model}
+\FloatBarrier
+\section{Methodology}
+\label{sec:model}
 
-Section~\ref{sec:data_features} produces 30 fixed early-cycle descriptors and 365 Local DeltaQ candidates. The fixed descriptors summarize capacity/SOH evolution and the global DeltaQ response. The local candidates retain position-aware and morphology-aware changes along the discharge curve. LDQ-ET first constructs a region-balanced local representation and then combines it with the fixed descriptors for nonlinear knee-cycle prediction.
+Building on the feature representations defined in Section~2, the proposed stability-aware Local DeltaQ--ExtraTrees framework (LDQ-ET) maps early-cycle measurements to absolute knee-cycle estimates while using the full-life SOH trajectory only for offline label construction. Figure~\ref{fig:methodology_framework} summarizes the three-stage workflow: Panel (a) separates the early predictor inputs from the offline target, Panel (b) confines feature selection and ExtraTrees development to the training data, and Panel (c) applies the frozen pipeline to the held-out primary and secondary cohorts. The corresponding feature-selection, model-fitting, and evaluation procedures are detailed in Sections~3.1--3.3.
 
-\subsection{LDQ-ET framework and protocol flow}\label{subsec:framework}
-
-We formulate LDQ-ET as a composition of a region-balanced selector $\mathcal{A}$ and an ExtraTrees regressor $\mathcal{F}$,
-\begin{equation}
-\widehat{y}_i
-=\mathcal{F}\!\left(
-\left[\mathbf{z}^{\mathrm{fixed}}_i,
-\boldsymbol{\phi}_{i,\mathcal{A}(\mathcal{D})}\right]
-\right),
-\end{equation}
-where $\mathbf{z}^{\mathrm{fixed}}_i$ denotes the fixed feature vector and $\boldsymbol{\phi}_i$ denotes the Local DeltaQ candidate vector. The selector $\mathcal{A}(\mathcal{D})$ returns a subset learned only from training data $\mathcal{D}$.
-
-Figure~\ref{fig:methodology_framework} summarizes the complete data path from early-cycle measurements to the protocol-frozen secondary-batch evaluation.
-
-\begin{figure}[!t]
+\begin{figure}[t]
 \centering
-\includegraphics[width=\textwidth]{figures/fig_methodology_framework.pdf}
-\caption{Development-only LDQ-ET workflow and protocol-frozen secondary-batch evaluation.}
+\includegraphics[page=1,width=\linewidth]{Figure3.png}
+\caption{Overview of the LDQ-ET framework and held-out evaluation workflow.}
 \label{fig:methodology_framework}
 \end{figure}
 
-Panel (a) separates predictor inputs from offline target construction. Only cycles 1--150 provide the capacity, SOH, and discharge-curve predictors. The complete SOH trajectory is used solely to determine the offline knee label $y_i$.
+\subsection{DeltaQ-Derived Descriptor Selection}
+\label{subsec:region_selection}
 
-Panel (b) confines median imputation, bootstrap scoring, regional selection, and model choice to development training folds. The selected 40 Local DeltaQ descriptors are combined with 30 fixed descriptors to form the 70-dimensional ExtraTrees input. Panel (c) freezes the finalized configuration before fitting on all 83 development cells and predicting the 40 secondary-batch cells across 30 prespecified seeds. The secondary batch contributes to none of the imputation, scoring, selection, hyperparameter choice, or model-fitting steps.
+The 326 local DeltaQ-derived candidates comprised 312 local-region descriptors and 14 morphology descriptors. To obtain a compact representation under a common feature budget, each selector retained $K=40$ descriptors from this candidate pool. Five selector families were then evaluated, emphasizing univariate relevance (Pearson), resampling stability (Bootstrap-stable), regional coverage (Region-balanced), contiguous structure (Contiguous-band), and relevance--redundancy trade-offs (mRMR-style). All imputation \cite{wilimitis2023crossvalidation}, scoring, and selection statistics were estimated exclusively from the training portion of each nested-development split \cite{ambroise2002selectionbias, varma2006crossvalidation, krstajic2014pitfalls}.
 
-The selected Local DeltaQ regions identify predictive associations under this protocol. Their distribution supports the presence of spatially distributed predictive information, but it does not establish a unique electrochemical mechanism.
-
-\FloatBarrier
-\subsection{Region-balanced Local DeltaQ selection}\label{subsec:region_selection}
-
-Let $\mathcal{G}_1,\ldots,\mathcal{G}_M$ denote the groups of descriptors extracted from the $M$ overlapping Local DeltaQ regions, and let $\mathcal{G}_0$ contain the whole-curve morphology descriptors. Because descriptors within neighboring groups measure related curve changes, an unconstrained relevance ranking can repeatedly select near-duplicate statistics from the same interval. The proposed selector addresses this concentration in two stages: it estimates how reproducibly each candidate is associated with the target and then imposes a capacity constraint on every group.
-
-Given training data $\mathcal{D}$, non-finite values of candidate $j$ are replaced by its median estimated from $\mathcal{D}$, and zero-variance candidates receive zero relevance. The basic relevance measure is the absolute Pearson correlation with the knee cycle,
+For a training set $\mathcal{D}$, non-finite entries are imputed with the corresponding training-partition median, and zero-variance candidates are excluded before scoring. Candidate relevance is measured by the absolute Pearson correlation with the knee cycle,
 \begin{equation}
 \rho_j(\mathcal{D})=
-\left|\frac{\sum_{i\in\mathcal{D}}(\phi_{ij}-\bar{\phi}_j)(y_i-\bar{y})}
-{\sqrt{\sum_{i\in\mathcal{D}}(\phi_{ij}-\bar{\phi}_j)^2}
+\left|\frac{\sum_{i\in\mathcal{D}}(\Phi_{ij}-\bar{\Phi}_j)(y_i-\bar{y})}
+{\sqrt{\sum_{i\in\mathcal{D}}(\Phi_{ij}-\bar{\Phi}_j)^2}
 \sqrt{\sum_{i\in\mathcal{D}}(y_i-\bar{y})^2}}\right|.
 \end{equation}
 
-To reduce sensitivity to a particular sample composition, $B$ cell-level bootstrap resamples are drawn from $\mathcal{D}$. Let $I_j^{(b)}=1$ when candidate $j$ belongs to the $K$ highest-relevance candidates in resample $b$, and let $I_j^{(b)}=0$ otherwise. The selection frequency and mean bootstrap relevance are
+Absolute Pearson correlation was used as the univariate relevance score. The Pearson selector ranked the eligible candidates by $\rho_j(\mathcal{D})$ and retained the 40 highest-ranked descriptors.
+
+From $\mathcal{D}$, $B$ cell-level bootstrap samples are drawn following the principle of resampling-stability selection \cite{meinshausen2010stability}. Let $I_j^{(b)}=1$ when candidate $j$ belongs to the top-$K$ ranking in bootstrap sample $b$, and let $I_j^{(b)}=0$ otherwise. Its selection frequency and mean bootstrap relevance are
 \begin{equation}
 \pi_j=\frac{1}{B}\sum_{b=1}^{B}I_j^{(b)},
 \qquad
 \bar{\rho}_j=\frac{1}{B}\sum_{b=1}^{B}\rho_j^{(b)}.
 \end{equation}
-A stability-aware score combines reproducible top-$K$ membership with normalized effect strength,
+A stability-aware score combines reproducible top-$K$ membership with normalized association strength,
 \begin{equation}
-z_j=\pi_j+\lambda
-\frac{\bar{\rho}_j}{\max_{\ell}\bar{\rho}_{\ell}},
+z_j=\pi_j+0.25
+\frac{\bar{\rho}_j}
+{\max\!\left(\max_{\ell}\bar{\rho}_{\ell},\varepsilon\right)},
 \end{equation}
-where $\lambda\geq0$ controls the contribution of relevance when candidates have similar selection frequencies. The frequency term favors associations that persist under cell-level resampling, while the second term resolves near ties without discarding effect magnitude.
+where $\varepsilon=10^{-12}$ prevents a zero denominator. The frequency term favors associations that recur across bootstrap samples, whereas the normalized relevance term preserves information about association strength. The Bootstrap-stable selector ranks eligible candidates by $z_j$ and retains the top 40. The number of bootstrap samples was fixed at $B=40$.
 
-The final subset is defined by the constrained ranking problem
+The Region-balanced selector limits the same $z_j$ ranking to $c=2$ descriptors per ordered region, with morphology descriptors treated as a separate group. The Contiguous-band selector takes the maximum $z_j$ per region, applies adjacent-region weights of 0.25, 0.50, and 0.25, and identifies the best seven-region band. It selects 32 descriptors from that band and eight from its complement. The correlation-based mRMR-style selector starts from the most relevant candidate. At each subsequent step, it maximizes Pearson relevance minus 0.15 times the candidate's mean absolute correlation with the current selected set \cite{peng2005feature}. Together, the five selectors provide matched controls for relevance, stability, spatial distribution, contiguity, and redundancy. Their scores quantify predictive association rather than evidence for a unique electrochemical mechanism.
+
+For selector-family finalization, each family $m$ was ranked using the training-only development score
 \begin{equation}
-\max_{\mathcal{S}}\sum_{j\in\mathcal{S}}z_j,
-\qquad
-|\mathcal{S}|=K,
-\qquad
-|\mathcal{S}\cap\mathcal{G}_r|\leq c
-\quad r=0,\ldots,M.
+S_m=\overline{\mathrm{MAE}}_m+0.10\,s_m+0.10\,\mathrm{MAE}^{\max}_m,
+\label{eq:selector_development_score}
 \end{equation}
-Here, $K$ controls representation size and $c$ limits the number of descriptors contributed by any single spatial or morphology group. We use a deterministic greedy solution: candidates are traversed in descending order of $z_j$, exact ties are resolved by feature name, and a candidate is accepted only if its group has not reached the cap. The procedure continues until $K$ candidates have been retained. The constraint does not assume that selected regions are independent or equally informative. Its purpose is narrower: to prevent a locally redundant cluster from exhausting the representation while preserving strong evidence distributed along the curve.
+where $\overline{\mathrm{MAE}}_m$, $s_m$, and $\mathrm{MAE}^{\max}_m$ are the mean, standard deviation, and maximum MAE across repeated outer folds, respectively. Lower values were preferred. This score was used only to rank selector families within the training cohort; held-out cohorts did not contribute to selector finalization. The selector family with the lowest development score, $m^{*}=\arg\min_m S_m$, was retained for final refitting.
 
-\subsection{ExtraTrees prediction and protocol freezing}\label{subsec:ldqet_prediction}
+\subsection{ExtraTrees Prediction And Pipeline Finalization}\label{subsec:ldqet_prediction}
 
-For cell $i$, the selector returns $\mathcal{S}=\mathcal{A}(\mathcal{D})$, and the corresponding Local DeltaQ descriptors are concatenated with the fixed feature view,
+For cell $i$, the selector returns $\mathcal{S}_{\mathcal{D}}=\mathcal{A}(\mathcal{D})$. The 30-dimensional always-retained vector $\mathbf{z}_i^{\mathrm{fixed}}$ comprises the 22 raw capacity/SOH descriptors and eight Global DeltaQ descriptors. It is concatenated with the selected DeltaQ-derived descriptors,
 \begin{equation}
 \mathbf{x}_i =
 \left[\mathbf{z}_i^{\mathrm{fixed}},
-\boldsymbol{\phi}_{i,\mathcal{S}}\right].
+\boldsymbol{\Phi}_{i,\mathcal{S}_{\mathcal{D}}}\right].
 \end{equation}
-With 40 selected Local DeltaQ descriptors and 30 fixed descriptors, $\mathbf{x}_i\in\mathbb{R}^{70}$. This vector is mapped to an absolute knee-cycle estimate using an Extremely Randomized Trees regressor \cite{geurts2006extremely}. For an ensemble of $T$ randomized regression trees,
+With 40 selected DeltaQ-derived descriptors and 30 fixed descriptors, $\mathbf{x}_i\in\mathbb{R}^{70}$. This vector is mapped to an absolute knee-cycle estimate using an Extremely Randomized Trees regressor \cite{geurts2006extremely}. For an ensemble of $T$ randomized regression trees,
 \begin{equation}
 \hat{y}_i = \frac{1}{T}\sum_{t=1}^{T} h_t(\mathbf{x}_i),
 \end{equation}
-where $h_t(\cdot)$ denotes the $t$th tree. At each node, ExtraTrees evaluates randomized thresholds for a random feature subset. It retains the split that produces the largest reduction in regression impurity. Averaging the resulting trees represents nonlinear interactions without requiring feature scaling or a prescribed parametric relation to the knee cycle.
+where $h_t(\cdot)$ denotes the $t$th tree. The same 70-dimensional vector is supplied to every tree. At each node, ExtraTrees evaluates randomized thresholds over a random 50\% feature subset and retains the split that produces the largest reduction in regression impurity. Each terminal leaf returns the mean training target of the samples assigned to that leaf, and the final prediction averages the tree outputs. This construction represents nonlinear interactions without requiring feature scaling or a prescribed parametric relation to the knee cycle.
 
-All fitted quantities are training-partition specific during nested development. These quantities include imputation medians, bootstrap relevance scores, selected descriptors, and ExtraTrees parameters. Development-only finalization then fixes the exact feature list, region cap, tree capacity, and 30 seed values. The finalized pipeline is fitted using the 83 development cells and applied to the secondary batch without feedback. Section~\ref{subsec:experimental_design} specifies the candidate configurations, nested folds, finalization score, and evaluation metrics.
+All fitted quantities are training-fold specific during nested development. These include imputation medians, selector scores, the selected descriptors, the selected ExtraTrees hyperparameters, and the fitted tree structures. Nested development selected a minimum leaf size of 1, using 500 trees for model screening. Under a prespecified tree-count policy, this selected structural configuration was then refitted with 1200 trees for each final ensemble. The increase in tree count was applied only after configuration selection and did not constitute further hyperparameter optimization. 
 
-\section{Experimental evaluation}\label{sec:results}
-
-\subsection{Experimental design}\label{subsec:experimental_design}
-
-All model-selection steps were confined to the 83-cell development cohort. The outer protocol used five-fold cross-validation repeated twice. Within each outer-training subset, three-fold inner cross-validation selected the selector configuration and one of two ExtraTrees capacities. The compact configuration used 500 trees and a minimum leaf size of 2, whereas the formal configuration used 1200 trees and a minimum leaf size of 1. Both used a maximum feature fraction of 0.5, a minimum split size of 2, a maximum depth of 6, and no bootstrap sampling. For region-balanced selection, the candidate settings were $B=40$, $K=40$, $\lambda=0.25$, and $c\in\{2,3\}$.
-
-The evaluated selector families were absolute-Pearson top-$K$ with $K\in\{20,40,60\}$; bootstrap-stable top40 without regional constraints; region-balanced selection; contiguous-band selection using 5, 7, or 9 neighboring regions and a core fraction of 0.6 or 0.8; and mRMR-style selection with relevance--redundancy penalties of 0.10 or 0.25. Within every inner and outer split, imputation, bootstrap resampling, candidate scoring, feature selection, and model fitting used only the corresponding training cells.
-
-Inner configurations were ranked using mean MAE, its standard deviation, worst-fold MAE, and prespecified selector-family and model-capacity penalties. After outer evaluation, selector families were summarized by
+The selector family retained during nested development was then refitted once on all 41 training cells to obtain the frozen 40-feature subset. Thirty ExtraTrees ensembles were fitted to the same imputed 70-dimensional training matrix using the prespecified seeds 123--152. For test cell $i$, the reported point estimate is
 \begin{equation}
-S_{\mathrm{dev}}=\overline{\mathrm{MAE}}_{\mathrm{outer}}
-+0.1\,\mathrm{SD}(\mathrm{MAE}_{\mathrm{outer}})
-+0.1\,\max(\mathrm{MAE}_{\mathrm{outer}})+C_{\mathrm{method}},
+\overline{y}_i=
+\frac{1}{30}\sum_{s=123}^{152}\widehat{y}_i^{(s)},
 \end{equation}
-where $C_{\mathrm{method}}$ was fixed before comparison: 0 for Pearson, 0.25 for bootstrap-stable, 0.50 for region-balanced and mRMR, and 0.75 for contiguous selection. A second five-fold cross-validation repeated twice over the complete development cohort selected the final region cap and ExtraTrees capacity. The selected region-balanced rule was then refitted once on all development cells to obtain the exact 40-feature Local DeltaQ set. Together with the 30 fixed descriptors, this produced the 70-dimensional input to the frozen formal ExtraTrees model. The feature-file hash, selected features, model settings, and 30 seed values were recorded before secondary-batch evaluation; no secondary-batch observation or label entered this process.
+where $\widehat{y}_i^{(s)}$ is the prediction from the ensemble fitted with seed $s$. Only the ExtraTrees randomization varied across the 30 fits; the selected feature subset and imputation statistics remained fixed.
 
-For an evaluation set of $n$ cells, performance was measured using MAE and RMSE,
+\subsection{Performance Metrics and Empirical Reliability Assessment}
+\label{subsec:reliability_protocol}
+
+Predictive performance is assessed at the cell level using mean absolute error (MAE), root mean squared error (RMSE), the coefficient of determination ($R^2$), and the 90th percentile of absolute error
+(q90-AE). These metrics summarize the typical error magnitude, place greater weight on larger errors, measure performance relative to the mean-target baseline, and characterize the upper tail of the absolute-error distribution, respectively. For $n$ evaluated cells, MAE and RMSE are defined as
 \begin{equation}
-\mathrm{MAE}=\frac{1}{n}\sum_{i=1}^{n}|y_i-\hat{y}_i|,
+\mathrm{MAE}=
+\frac{1}{n}\sum_{i=1}^{n}\left|y_i-\overline{y}_i\right|,
+\label{eq:mae}
+\end{equation}
+\begin{equation}
+\mathrm{RMSE}=
+\sqrt{\frac{1}{n}\sum_{i=1}^{n}\left(y_i-\overline{y}_i\right)^2},
+\label{eq:rmse}
+\end{equation}
+where $\overline{y}_i$ is the 30-seed mean prediction defined in Section~\ref{subsec:ldqet_prediction}. The coefficient of determination is
+\begin{equation}
+R^2=
+1-\frac{\sum_{i=1}^{n}\left(y_i-\overline{y}_i\right)^2}
+{\sum_{i=1}^{n}\left(y_i-\bar{y}\right)^2},
 \qquad
-\mathrm{RMSE}=\sqrt{\frac{1}{n}\sum_{i=1}^{n}(y_i-\hat{y}_i)^2}.
+\bar{y}=\frac{1}{n}\sum_{i=1}^{n}y_i.
+\label{eq:r2}
 \end{equation}
-Both are reported in cycles. MAPE and $R^2$ were also calculated, and the 90th percentile of cell-level absolute errors was used to characterize the upper error tail. Representative readout comparisons included compact ExtraTrees, RandomForest \cite{breiman2001random}, XGBoost \cite{chen2016xgboost}, RBF-SVR, and RidgeCV; all used identical cell-level development folds and the corresponding fold-specific processing controls.
+MAE and RMSE are reported in cycles, whereas $R^2$ is dimensionless. The q90 absolute error, which is also reported in cycles, is defined as
+\begin{equation}
+q_{0.90}^{\mathrm{AE}}=
+Q_{0.90}\!\left(
+\left\{|y_i-\overline{y}_i|\right\}_{i=1}^{n}
+\right),
+\end{equation}
 
-\subsection{Performance across development and batch shift}\label{subsec:main_results}
+Reliability is further assessed from the complete cell-level error distribution and a training-calibrated empirical interval. To calibrate the interval without using the held-out cohorts, out-of-fold predictions were obtained for the training cells during the repeated outer-CV procedure. Each training cell received one out-of-fold prediction in each of the two outer-CV repeats. Let $\widehat{y}_{i,a}^{\mathrm{OOF}}$ denote the prediction for cell $i$ from repeat $a\in\{1,2\}$. The repeat-averaged out-of-fold prediction and the corresponding absolute calibration residual were defined as
+\begin{equation}
+\widehat{y}_i^{\mathrm{OOF}}
+=
+\frac{1}{2}
+\sum_{a=1}^{2}
+\widehat{y}_{i,a}^{\mathrm{OOF}},
+\qquad
+e_i^{\mathrm{OOF}}
+=
+\left|
+y_i-\widehat{y}_i^{\mathrm{OOF}}
+\right|.
+\label{eq:oof_residual}
+\end{equation}
 
-To choose a Local DeltaQ selection rule without secondary-batch feedback, we compared the five prespecified selector families under identical nested development folds. Table~\ref{tab:selector_results} reports the resulting performance and stability measures. Region-balanced selection had the lowest raw mean MAE and fold-to-fold variability, reaching $43.01\pm5.43$ cycles. Bootstrap-stable selection reached $43.29\pm5.83$ cycles, with a paired absolute-error difference of 0.18 cycles relative to region-balanced selection (95\% bootstrap CI, $-1.43$ to $1.63$; $p=0.816$). Region-balanced selection also had the lowest prespecified selection score. Its frozen 40-feature set covered 13 spatial regions and the auxiliary morphology group. The contiguous candidate reached $43.14\pm6.08$ cycles. Figure~\ref{fig:selector_comparison} shows the fold distributions, selection scores, Jaccard stability, and paired comparisons. The region-balanced selector is therefore treated as the prespecified development choice, rather than as evidence of universal superiority over the statistically similar alternatives.
+For $n_{\mathrm{cal}}=41$ training cells, the empirical interval half-width associated with the target level $1-\alpha$ was defined as
+\begin{equation}
+r_{\alpha}=Q_{\lceil(n_{\mathrm{cal}}+1)(1-\alpha)\rceil/n_{\mathrm{cal}}}
+\left(\left\{e_i^{\mathrm{OOF}}\right\}_{i=1}^{n_{\mathrm{cal}}}\right),
+\end{equation}
+where $Q$ is the empirical quantile evaluated using the \texttt{higher} empirical-quantile rule. For the test-cell point estimate $\overline{y}_i$ defined above, the interval is
+\begin{equation}
+\mathcal{I}_i(\alpha)=
+\left[\overline{y}_i-r_{\alpha},\overline{y}_i+r_{\alpha}\right].
+\end{equation}
+We used $\alpha=0.10$. The resulting constant-width interval was used to summarize empirical uncertainty around each point estimate and to compare coverage behavior between the primary and secondary cohorts.
 
-\begin{table}[!htbp]
-\caption{Strict nested development results at N150. Values are mean $\pm$ standard deviation over 10 outer folds. The q90 error is the mean across folds of the 90th percentile of cell-level absolute prediction error. Jaccard is computed across outer-fold selected feature sets.}\label{tab:selector_results}
+\FloatBarrier
+\section{Experimental Results and Analysis}\label{sec:results}
+
+\subsection{Evaluation Cohorts}
+\label{subsec:experimental_design}
+
+The official partitions defined by Severson et al.~\cite{severson2019data} were retained as the basis of the evaluation design. After offline knee-label construction (Section~\ref{subsec:knee_label}), one primary-test cell (\texttt{b2c1}, $y_i=94$) was excluded because its knee occurred within the 150-cycle observation window and did not satisfy the prespecified requirement $y_i>150$. The final evaluation cohorts comprised 41 training cells, 42 primary-test cells, and 40 secondary-test cells. Table~\ref{tab:dataset} summarizes their sizes and knee-cycle distributions, with knee cycles reported as the median and the first and third quartiles in brackets.
+
+\begin{table}[!ht]
+\caption{Cell counts and knee-cycle distributions across the evaluation cohorts.}
+\label{tab:dataset}
 \centering
-\begin{tabular}{@{}llllll@{}}
+\fontsize{8.5pt}{10.2pt}\selectfont
+\setlength{\tabcolsep}{6pt}
+\renewcommand{\arraystretch}{1.12}
+
+\begin{tabular}{@{}
+>{\centering\arraybackslash}m{0.33\textwidth}
+>{\centering\arraybackslash}m{0.20\textwidth}
+>{\centering\arraybackslash}m{0.43\textwidth}
+@{}}
 \toprule
-Selector & MAE & RMSE & q90 error & Jaccard & Score \\
+Cohort &
+Cells count &
+Knee cycle, median [$Q_1$, $Q_3$] \\
 \midrule
-Region-balanced & $43.01\pm5.43$ & 65.18 & 87.84 & 0.530 & 49.097 \\
-Bootstrap-stable & $43.29\pm5.83$ & 65.57 & 89.85 & 0.794 & 49.151 \\
-Contiguous band & $43.14\pm6.08$ & 65.83 & 86.47 & 0.603 & 49.359 \\
-Pearson top-$k$ & $44.08\pm7.47$ & 66.90 & 90.55 & 0.616 & 50.758 \\
-mRMR & $44.27\pm6.92$ & 67.47 & 91.80 & 0.786 & 50.960 \\
-\botrule
+Train & 41 & 428 [377, 580] \\
+Primary test & 42 & 429.5 [385.25, 629.5] \\
+Secondary test & 40 & 796.5 [670.25, 905] \\
+\bottomrule
 \end{tabular}
 \end{table}
+\FloatBarrier
 
-\begin{figure}[!htbp]
+The 41-cell training cohort was used for nested model development and pipeline finalization. The frozen pipeline was then applied without modification to the primary-test and secondary-test cohorts, which assessed same-batch performance and performance under the observed batch shift, respectively. 
+
+The training and primary-test cohorts showed nearly identical median knee cycles of 428 and 429.5, together with substantially overlapping interquartile ranges, indicating broadly comparable target distributions. In contrast, the secondary-test cohort had a median knee cycle of 796.5, approximately 369 cycles later than that of the training cohort. Its interquartile range of $[670.25,905]$ also lay entirely above those of the training and primary-test cohorts. The secondary-test evaluation therefore examined the frozen pipeline under a pronounced shift toward later degradation transitions, rather than on another cohort with a target distribution similar to that used for model development.
+
+\subsection{Selector Comparison And Final Representation}
+\label{subsec:main_results}
+
+The 326 localized DeltaQ candidates provide overlapping and potentially redundant descriptions of early curve changes. Relative to the 41-cell development cohort, this high-dimensional and strongly correlated candidate pool can increase estimation variance, destabilize the retained feature set, and obscure the contribution of informative discharge regions. A compact feature-selection step was therefore required before model fitting. We therefore compared the five selector families defined in Section~\ref{subsec:region_selection} in terms of predictive accuracy, cross-fold reproducibility, and spatial coverage. All selectors were evaluated using the same repeated outer 5-fold cross-validation procedure with two repeats, the same candidate pool, a fixed feature budget of $K=40$, and identical imputation and ExtraTrees development settings.
+
+\begin{table}[!ht]
+\caption{Training-only comparison of five selector families across ten repeated outer folds. MAE is reported in cycles.}
+\label{tab:selector_metrics}
 \centering
-\includegraphics[width=\textwidth]{figures/fig2_strict_nested_selector_comparison.pdf}
-\caption{Strict nested selector comparison at a 150-cycle observation budget. (a) Outer-fold MAE distributions. (b) Prespecified development score. (c) Feature-set Jaccard stability. (d) Cell-level paired MAE differences relative to region-balanced selection; lines are 95\% cell-bootstrap intervals.}
-\label{fig:selector_comparison}
-\end{figure}
+\small
+\setlength{\tabcolsep}{2.5pt}
+\renewcommand{\arraystretch}{1.12}
+\begingroup
+\renewcommand{\tabularxcolumn}[1]{m{#1}}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}m{0.22\textwidth}*{4}{>{\centering\arraybackslash}X}@{}}
+\toprule
+Selector & Outer-fold MAE (mean $\pm$ SD) & Worst-fold MAE & Mean Jaccard \\
+\midrule
+Bootstrap-stable    & $48.91\pm27.65$ & 101.28 & 0.728 \\
+Contiguous-band     & $53.17\pm30.63$ & 114.23 & 0.660 \\
+Region-balanced     & $52.78\pm29.31$ & 110.81 & 0.632 \\
+Pearson             & $56.67\pm32.55$ & 118.86 & 0.593 \\
+mRMR-style          & $54.49\pm31.98$ & 113.89 & 0.622 \\
+\botrule
+\end{tabularx}
+\endgroup
+\end{table}
 
 \FloatBarrier
-\noindent\textit{Performance across observation budgets.}
 
-To quantify the trade-off between earlier prediction and accuracy, observation-budget experiments used the same N150-eligible 83-cell development cohort at N50, N100, and N150, preventing changing eligibility from confounding window length. The best 5-fold$\times$2 results were $59.71\pm21.85$ cycles at N50 (mRMR), $44.85\pm6.13$ at N100 (mRMR), and $43.01\pm5.43$ at N150 (region-balanced). Within the tested budgets, observing more cycles reduced both error and fold instability, making N150 region-balanced LDQ-ET the most reliable tested configuration.
+Table~\ref{tab:selector_metrics} summarizes the training-only results across ten repeated outer folds. Outer-fold MAE is reported as the mean $\pm$ standard deviation, while mean Jaccard quantifies the reproducibility of the selected feature sets across folds, with larger values indicating greater cross-fold agreement.
 
-To determine whether performance had saturated with the available development data, we repeated training with 25\%, 50\%, 75\%, and 100\% of each outer-training subset. Mean MAE decreased monotonically from 63.45 cycles at 25\% to 43.20 cycles at 100\%. Figure~\ref{fig:budget_learning} summarizes both experiments, indicating that additional early observations and additional development cells remain valuable in the present data regime.
-
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{figures/fig3_observation_budget_and_data_efficiency.pdf}
-\caption{Observation budget and data efficiency. (a,b) Common-cohort nested MAE and RMSE for N50, N100, and N150. Error bars in (a) show fold standard deviations. (c) Development-only repeated-subsampling learning curve. (d) Mean number of training cells at each fraction.}
-\label{fig:budget_learning}
-\end{figure}
+Across selector families, mean outer-fold MAEs ranged from 48.91 to 56.67 cycles, while worst-fold MAEs ranged from 101.28 to 118.86 cycles. Bootstrap-stable achieved the lowest mean outer-fold MAE and the lowest worst-fold MAE. It also yielded the highest mean Jaccard coefficient of 0.728, indicating greater reproducibility of the selected descriptor sets across outer folds than the other selector families.
 
 \FloatBarrier
-\noindent\textit{Transfer to the frozen secondary batch.}
 
-To assess batch transfer after protocol freezing, the immutable region-balanced top40 selector and formal ExtraTrees configuration were fitted to all 83 development cells and evaluated with 30 prespecified seeds. Table~\ref{tab:main_results} compares this result with the exactly reproduced historical top40 anchor. The frozen model reached $76.59\pm0.75$ cycles MAE, $113.93\pm0.91$ RMSE, $9.00\pm0.10\%$ MAPE, and $R^2=0.783\pm0.003$. Averaging predictions over seeds gave a cell-bootstrap MAE of 76.41 cycles (95\% CI, 51.83--103.24). Relative to the historical anchor, the paired per-cell absolute-error difference was $-0.69$ cycles (95\% CI, $-4.09$ to $3.31$; sign-flip $p=0.753$). The nested pipeline therefore retained anchor-level accuracy while adding fold-safe region selection, a frozen configuration, and quantified algorithmic reproducibility. Because the secondary batch had been inspected during earlier project exploration, this result is interpreted as a protocol-controlled, historically informed evaluation rather than an untouched external confirmation.
+% \begin{figure}[t]
+% \centering
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure4a.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure4b.png}
+% \end{minipage}
 
-\begin{table}[!htbp]
-\caption{Protocol-frozen secondary-batch performance on 40 cells. Values are mean $\pm$ standard deviation over 30 algorithmic seeds; seeds are not independent external cohorts.}\label{tab:main_results}
+% \vspace{0.35em}
+
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure4c.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure4d.png}
+% \end{minipage}
+
+% \caption{Training-only selector comparison at a 150-cycle observation budget. (a) Distribution of outer-fold MAE across ten repeats. (b) Mean--worst-fold error trade-off. (c) Cross-fold stability of selected feature sets, measured by pairwise Jaccard overlap. (d) Mean selected local-descriptor count along ordered discharge segments; whole-curve morphology descriptors are omitted.}
+% \label{fig:selector_comparison}
+% \end{figure}
+
+\begin{figure*}[t]
+  \centering
+  \includegraphics[width=\textwidth]{Figure4.png}
+  \caption{Training-only selector comparison at a 150-cycle observation budget.}
+  \label{fig:selector_comparison}
+\end{figure*}
+
+\FloatBarrier
+
+Figure~\ref{fig:selector_comparison}a shows substantial overlap among the fold-wise MAE distributions, although Bootstrap-stable exhibits a lower central tendency than the other selector families. Figure~\ref{fig:selector_comparison}b places Bootstrap-stable at the joint minimum of mean and worst-fold MAE, visually confirming its advantages in both average predictive accuracy and worst-fold robustness. Figure~\ref{fig:selector_comparison}c further shows that Bootstrap-stable achieves the highest mean pairwise feature-set Jaccard, indicating the strongest cross-fold reproducibility of the selected descriptors.
+
+The regional maps in Figure~\ref{fig:selector_comparison}d reveal a common emphasis on the middle portion of the discharge coordinate. Contiguous-band produces the most concentrated selection pattern, whereas Region-balanced distributes its selections over a broader range of discharge segments. By comparison, Bootstrap-stable maintains a consistent emphasis on the middle-discharge segments without concentrating excessively on a narrow region or dispersing selections too broadly, thereby providing a comparatively balanced pattern between regional concentration and spatial coverage.
+
+Taken together, the tabulated results and visual comparisons show that Bootstrap-stable provides the most favorable combination of average predictive accuracy, worst-fold robustness, and cross-fold feature-set reproducibility. Bootstrap-stable was therefore selected as the finalized selector family for downstream modeling. Refitting it on all training cells retained 37 local-region descriptors and three morphology descriptors. Together with the 30 fixed raw/SOH and Global DeltaQ descriptors, these formed the final 70-dimensional representation used for downstream modeling.
+
+\FloatBarrier
+\subsection{Same-Batch Performance And Generalization Under Batch Shift}
+\label{subsec:test_performance}
+
+To distinguish same-batch predictive performance from generalization under batch shift, the finalized LDQ-ET model was evaluated on two held-out cohorts with different relationships to the development data. As described in Section~\ref{subsec:experimental_design}, the 42-cell primary-test cohort originated from the same batch and had a knee-cycle distribution close to that of the training cohort, whereas the 40-cell secondary-batch cohort exhibited substantially later knee cycles and provided a more demanding transfer setting.
+
+Following the selector comparison in Section~4.2, Bootstrap-stable was fixed as the local-descriptor selector, yielding the finalized 70-dimensional LDQ-ET representation. This representation and the 1200-tree ExtraTrees regressor were then fixed under the 150-cycle observation budget and evaluated on both cohorts without further modification. Performance was summarized using cell-level MAE, RMSE, $R^2$, and the 90th-percentile absolute error (q90-AE), with 95\% confidence intervals reported in Table~\ref{tab:heldout_summary}.
+
+\begin{table}[!ht]
+\caption{Summary of test-cohort predictive performance. Values in brackets indicate 95\% confidence intervals.}
+\label{tab:heldout_summary}
 \centering
 \footnotesize
-\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}p{0.25\textwidth}p{0.13\textwidth}p{0.13\textwidth}p{0.14\textwidth}p{0.13\textwidth}p{0.12\textwidth}@{}}
+\setlength{\tabcolsep}{1.6pt}
+\renewcommand{\arraystretch}{1.50}
+\begingroup
+\renewcommand{\tabularxcolumn}[1]{m{#1}}
+\begin{tabularx}{\textwidth}{
+@{}
+>{\raggedright\arraybackslash}m{0.24\textwidth}
+>{\centering\arraybackslash}m{0.05\textwidth}
+*{4}{>{\centering\arraybackslash}X}
+@{}
+}
 \toprule
-Model/status & MAE & RMSE & MAPE & $R^2$ & Reading \\
+Test cohort 
+& $n$ 
+& \shortstack{MAE (cycles)\\ \mbox{[95\% CI]}} 
+& \shortstack{RMSE (cycles)\\ \mbox{[95\% CI]}} 
+& \shortstack{$R^2$\\ \mbox{[95\% CI]}} 
+& \shortstack{q90 AE (cycles)\\ \mbox{[95\% CI]}} \\
 \midrule
-Historical LDQ-ET top40, reproduced & $77.31\pm0.90$ & $111.09\pm0.94$ & $9.07\pm0.12\%$ & $0.794\pm0.003$ & Anchor \\
-Frozen region-balanced LDQ-ET & $76.59\pm0.75$ & $113.93\pm0.91$ & $9.00\pm0.10\%$ & $0.783\pm0.003$ & Parity \\
+Primary test (same batch) 
+& 42 
+& \shortstack{38.23\\ \mbox{[26, 52]}} 
+& \shortstack{56.87\\ \mbox{[38, 76]}} 
+& \shortstack{0.957\\ \mbox{[0.895, 0.979]}} 
+& \shortstack{95.50\\ \mbox{[59, 123]}} \\
+Secondary test (cross-batch) 
+& 40 
+& \shortstack{64.15\\ \mbox{[46, 84]}} 
+& \shortstack{88.74\\ \mbox{[61, 114]}} 
+& \shortstack{0.868\\ \mbox{[0.778, 0.919]}} 
+& \shortstack{153.15\\ \mbox{[79, 204]}} \\
 \botrule
-\end{tabular}
+\end{tabularx}
+\endgroup
 \end{table}
 
-Figure~\ref{fig:external_prediction} shows predictions, residuals, paired errors, and the seed-level MAE distribution. The median external absolute error was 43.82 cycles, but the q90 and q95 errors were 190.61 and 265.12 cycles; three cells exceeded 200 cycles. The largest error occurred for b3c38, whose knee at cycle 1522 was underpredicted by 376.17 cycles. These tail cases explain why the frozen model slightly improves MAE while worsening RMSE and $R^2$ relative to the historical anchor.
+% \begin{figure}[!ht]
+% \centering
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure5a.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure5b.png}
+% \end{minipage}
 
-\begin{figure}[!htbp]
-\centering
-\includegraphics[width=\textwidth]{figures/fig5_frozen_secondary_batch_performance.pdf}
-\caption{Protocol-frozen secondary-batch performance. (a) Predicted versus observed knee cycles with development-calibrated empirical intervals; red points are uncovered. (b) Residual structure. (c) Per-cell absolute errors for the historical and frozen models. (d) MAE variation over 30 seeds.}
-\label{fig:external_prediction}
+% \vspace{0.35em}
+
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure5c.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure5d.png}
+% \end{minipage}
+
+% \caption{Test-cohort performance of the frozen LDQ-ET pipeline. (a) Observed and predicted knee cycles. 
+% (b) Absolute-error distributions. 
+% (c) The 12 largest cell-level absolute errors. 
+% (d) Cohort-level MAE across 30 prespecified ExtraTrees seeds; these values assess algorithmic reproducibility rather than independent experimental replication. 
+% Colors distinguish the primary (blue) and secondary (orange) cohorts. 
+% Cell identifiers use \texttt{bNcM}, where \texttt{bN} denotes the source batch and \texttt{cM} denotes the cell identifier.}
+% \label{fig:external_prediction}
+% \end{figure}
+
+\begin{figure}[!ht] 
+\centering 
+\includegraphics[width=\textwidth]{Figure5.png} 
+\caption{Test-cohort performance of the frozen LDQ-ET pipeline. (a) Observed and predicted knee cycles. (b) Absolute-error distributions. (c) The 12 largest cell-level absolute errors. (d) Cohort-level MAE across 30 prespecified ExtraTrees seeds; these values assess algorithmic reproducibility rather than independent experimental replication. Cell identifiers use \texttt{bNcM}, where \texttt{bN} denotes the source batch and \texttt{cM} denotes the cell identifier.} 
+\label{fig:external_prediction} 
 \end{figure}
+
+As summarized in Table~\ref{tab:heldout_summary}, the frozen model achieved stronger predictive performance on the primary same-batch cohort, with an MAE of 38.23 cycles, an RMSE of 56.87 cycles, and an $R^2$ of 0.957. On the secondary cross-batch cohort, the MAE and RMSE increased to 64.15 and 88.74 cycles, respectively, while $R^2$ decreased to 0.868, indicating a measurable generalization penalty under batch shift. The q90 absolute error also increased from 95.50 to 153.15 cycles, showing that cross-batch transfer enlarged the upper tail of the prediction-error distribution. Nevertheless, the frozen model retained substantial explanatory power in the secondary cohort.
+
+Figure~\ref{fig:external_prediction} provides cell-level context for the cohort-level summaries. Figure~\ref{fig:external_prediction}a shows that predictions in both cohorts broadly follow the identity line, although the primary-test cells are more tightly distributed around it, whereas the secondary cohort exhibits greater dispersion, particularly through the underprediction of several late-knee cells. This contrast is also evident in Figure~\ref{fig:external_prediction}b, where the secondary-cohort absolute-error distribution is shifted toward larger values and has a broader upper tail. Figure~\ref{fig:external_prediction}c shows that seven of the 12 largest cell-level absolute errors, including the largest error, occur in the secondary cohort. Large deviations are therefore present in both cohorts but are more prominent among the secondary cells. Finally, Figure~\ref{fig:external_prediction}d shows that the cohort-level MAEs remain nearly invariant across the 30 prespecified ExtraTrees seeds, at approximately 38.2 cycles for the primary cohort and 64.2 cycles for the secondary cohort. Together, these observations are consistent with the cohort-level performance gap reported in Table~\ref{tab:heldout_summary} and indicate that the gap is not attributable to seed-to-seed variation in model fitting.
+
+The observed pattern is consistent with a distribution shift in the early-cycle descriptors, the knee-cycle labels, or their relationship between the development data and the secondary batch. Because the primary cohort originates from the same batch as the training data, its early-trajectory distribution is more closely aligned with that used to learn the mapping from the Local DeltaQ, raw/SOH, and Global DeltaQ descriptors to the knee cycle. The underprediction of several late-knee cells in the secondary cohort suggests that this mapping transfers less faithfully toward the upper end of the secondary knee-cycle range. However, the observed error patterns alone are insufficient to attribute the cohort-level performance difference to any specific electrochemical mechanism. Distinguishing changes in degradation pathways from differences in measurement conditions, operating histories, or target distributions would require additional batch-level covariates, mechanistic measurements, and evaluation on further independent batches.
 
 \FloatBarrier
-\subsection{Sources of predictive performance}\label{subsec:deep_comparison}
 
-To separate the contributions of feature representation and model readout, all comparisons were rerun on identical development outer folds with Local DeltaQ selection fitted inside each training fold. The full raw+global+local representation achieved $43.17\pm5.43$ cycles MAE. Raw+global gave $43.00\pm9.46$, and raw+local gave $42.73\pm5.69$. In contrast, raw-only, global-only, and local-only inputs reached 92.67, 59.46, and 52.85 cycles, respectively. The comparable performance of raw+global and raw+local combinations indicates that global summaries and Local DeltaQ encode partially substitutable early-degradation information. The full representation retained this information with lower fold-to-fold variability than raw+global alone.
+\subsection{Matched Regressor Comparison}\label{subsec:regressor_comparison}
 
-Among the representative readouts tested with the full fold-selected representation, compact ExtraTrees reached $46.75\pm8.19$ cycles, compared with 51.52 for RandomForest and 54.91 for XGBoost. The RBF-SVR reached 103.18 cycles, while RidgeCV was unstable under the highly collinear representation (mean MAE 429.36 cycles). The formal ExtraTrees configuration selected in the nested main experiment improved the MAE to 43.01 cycles. Figure~\ref{fig:feature_model_ablation} reports these comparisons and paired feature-group intervals. Within the tested small-cohort setting, these results identify ExtraTrees as an effective readout for the structured representation \cite{geurts2006extremely}.
+% Having established the frozen-pipeline results, we used a matched regressor-family comparison to contextualize the choice of the downstream model. Each candidate used the complete 70-dimensional representation and its prespecified configuration, and repeated training-only cross-validation provided the development comparison. As summarized in Table~\ref{tab:predictor_family}, ExtraTrees achieved the lowest training-CV MAE at 56.36 cycles, ahead of Random Forest at 65.73 cycles, and was therefore mapped to the prespecified 1200-tree final ensemble.
 
-\begin{figure}[!htbp]
+Having established the held-out performance of the frozen LDQ-ET model, we next conducted a matched comparison with alternative regressors to provide a broader performance benchmark. All regressors used the same finalized 70-dimensional representation produced by the fixed Bootstrap-stable selector and were evaluated under the same 150-cycle observation budget, data preprocessing, cohort splits, and prespecified random seeds. The comparison included SVR-RBF as a nonlinear kernel baseline, XGBoost as a gradient-boosted tree model, Random Forest as a bagged tree ensemble, and ExtraTrees as the finalized regressor in LDQ-ET. Table~\ref{tab:predictor_family} summarizes their training-CV, primary-cohort, and secondary-cohort performance.
+
+\begin{table}[!ht]
+\caption{Matched comparison of alternative regressors using the complete representation. Values are means across ten prespecified seeds. MAE and q90 are reported in cycles.}
+\label{tab:predictor_family}
 \centering
-\includegraphics[width=\textwidth]{figures/fig6_feature_group_and_model_family_ablation.pdf}
-\caption{Feature-group and representative model-family ablations on development outer folds. (a) Seven feature groups; bars show fold mean and standard deviation. (b) Representative readouts on a log MAE axis. (c) Paired cell-level MAE differences relative to the full feature group with 95\% bootstrap intervals. (d) Mean representation size.}
-\label{fig:feature_model_ablation}
-\end{figure}
+\footnotesize
+\setlength{\tabcolsep}{2.8pt}
+\renewcommand{\arraystretch}{1.16}
 
-The feature-group experiments provide a boundary on interpretation. Raw+global and raw+local inputs performed comparably, indicating that global and Local DeltaQ descriptors contained partially substitutable information. The complete representation mainly reduced fold-to-fold variation relative to raw+global inputs. Local DeltaQ should therefore be viewed as a structured representation of distributed curve changes, not as a uniquely sufficient predictor. ExtraTrees supplied the strongest tested small-sample readout and required only milliseconds per cell. The framework connects interval selection, stability selection, ordered feature structure, and lightweight ensemble regression in a knee-specific pipeline \cite{servien2024interval,meinshausen2010stability,tibshirani2005fused,sanches2026single}.
+\begin{tabularx}{\textwidth}{
+@{}
+>{\raggedright\arraybackslash}m{0.20\textwidth}
+>{\centering\arraybackslash}m{0.13\textwidth}
+*{6}{>{\centering\arraybackslash}X}
+@{}
+}
+\toprule
+\multicolumn{1}{c}{
+  \multirow[c]{2}{*}[-0.5ex]{\makecell[c]{Regressor}}
+}
+&
+\multicolumn{1}{c}{
+  \multirow[c]{2}{*}[-0.5ex]{\makecell[c]{Train-CV\\MAE}}
+}
+& \multicolumn{3}{c}{Primary}
+& \multicolumn{3}{c}{Secondary} \\
+\cmidrule(lr){3-5}\cmidrule(lr){6-8}
+& & MAE & $R^2$ & q90
+  & MAE & $R^2$ & q90 \\
+\midrule
+% Ridge         & 104.86 & 165.84 & -1.440 & 316.24 & 193.62 & -1.900 & 378.80 \\
+SVR-RBF       & 70.94  & 75.34  & 0.625  & 146.80 & 159.82 & -0.284 & 328.00 \\
+XGBoost       & 63.84  & 61.92  & 0.824  & 137.40 & 115.36 & 0.600  & 238.20 \\
+Random Forest & 57.88  & 45.61  & 0.939  & 106.70 & 70.52  & 0.842  & 175.80 \\
+ExtraTrees    & 49.76  & 38.23  & 0.957  & 95.50  & 64.15  & 0.868  & 153.15 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Under the matched evaluation, SVR-RBF and XGBoost showed weaker overall performance than the two randomized tree ensembles. The cross-batch limitation was most evident for SVR-RBF, whose secondary-cohort $R^2$ decreased to $-0.284$ and q90 increased to 328.00 cycles. XGBoost improved the secondary-cohort MAE to 115.36 cycles and restored a positive $R^2$ of 0.600, but remained less accurate than the tree ensembles. Random Forest and ExtraTrees produced substantially stronger and more consistent results across the development and held-out evaluations. ExtraTrees achieved the lowest training-CV MAE of 49.76 cycles and retained the most favorable performance on both cohorts, with MAEs of 38.23 and 64.15 cycles on the primary and secondary cohorts, respectively. Its corresponding $R^2$ values remained high at 0.957 and 0.868, while the secondary-cohort q90 was limited to 153.15 cycles. Thus, with the feature representation and evaluation protocol held fixed, LDQ-ET demonstrated the most consistently favorable performance among the tested regressors.
+
+The stronger performance of the two randomized tree ensembles suggests that the finalized 70-dimensional representation contains nonlinear interactions and threshold-dependent relationships that are well suited to tree-based partitioning. Random Forest and ExtraTrees can combine the raw/SOH, Global DeltaQ, and localized descriptors without imposing a single global functional form, which may help accommodate heterogeneous associations across cells. The additional randomization of split thresholds in ExtraTrees may further reduce dependence on particular feature cut points and limit correlation among individual trees, potentially contributing to its more stable same-batch and cross-batch performance.
 
 \FloatBarrier
-\subsection{Spatial distribution of Local DeltaQ information}\label{subsec:topk_ablation}
 
-The controlled region experiments tested whether prediction depended on the normalized-coordinate interval 0.525--0.650 identified in the historical bootstrap audit. All variants used the same outer folds and the formal ExtraTrees readout. Pearson top40 across all regions reached $43.25\pm5.44$ cycles MAE. Restricting candidates to the core interval reached $43.58\pm8.57$ cycles, whereas excluding that interval reached $44.07\pm9.06$ cycles. Removing core features from the fold-selected set gave $43.41\pm6.50$ cycles. Three random 40-feature controls averaged approximately 45.79 cycles, while equal-width random bands showed greater fold-to-fold variation. No tested interval was therefore individually necessary or sufficient for the observed development accuracy.
+\subsection{Matched Input Ablation and Early-Observation Performance}
+\label{subsec:deep_comparison}
 
-The core permutation addressed predictive reliance rather than feature sufficiency. Permuting core-region columns in validation cells increased mean MAE to approximately 98 cycles. This perturbation breaks the dependence structure among overlapping descriptors and can create feature combinations absent from the observed data. It therefore supports reliance on the correlated core cluster, but it does not establish isolated importance or causality. Figure~\ref{fig:region_controls} summarizes the frozen representation, fold-level selections, region controls, and permutation diagnostic. Taken together, the controls support a distributed and partially redundant Local DeltaQ representation.
+% A matched training-only comparison averaged over ten seeds isolated the contribution of each input block to LDQ-ET performance (Table~\ref{tab:representation_comparison}). Each representation was independently developed on the 41-cell training cohort, with Local DeltaQ blocks reselected within the corresponding training folds. Raw/SOH alone provided a weak baseline, yielding MAEs of 101.30 cycles on the primary-test cohort and 378.98 cycles on the secondary batch. Adding Global DeltaQ produced the first substantial reduction, lowering these errors to 45.99 and 177.40 cycles, respectively. The inclusion of selected Local DeltaQ descriptors then reduced secondary-batch MAE to 90.00 cycles, while the complete representation reached 88.69 cycles. The small difference between these two Local DeltaQ-containing representations indicates that the selected localized descriptors accounted for most of the observed secondary-batch improvement.
 
-\begin{figure}[t]
+To quantify the contribution of each component of the early-cycle representation, we first conducted a matched input comparison under the 150-cycle observation budget. The evaluated configurations progressively incorporated raw capacity/SOH descriptors, Global DeltaQ statistics, and selected Local DeltaQ descriptors, culminating in the complete representation. Except for the training-median reference, each input configuration was developed independently using the same cohort splits, nested-development procedure, ExtraTrees settings, and prespecified random seeds. Any data-dependent feature-selection steps were repeated within the corresponding training splits.
+
+\begin{table}[!ht]
+\caption{Matched comparison of independently developed input representations under the 150-cycle observation budget. Values are means across ten prespecified seeds, and MAE is reported in cycles.}
+\label{tab:representation_comparison}
 \centering
-\includegraphics[width=\textwidth]{figures/fig4_local_region_contribution_and_controls.pdf}
-\caption{Controlled region analyses. (a) Frozen descriptors across normalized coordinates; the shaded area is the historical 0.525--0.650 core. (b) Region-level selection across 10 outer folds. (c) Core-only, exclusion, removal, random-band and random-feature controls. (d) Core permutation used as a predictive-reliance diagnostic under dependence-breaking perturbation.}
-\label{fig:region_controls}
+\footnotesize
+\setlength{\tabcolsep}{3.5pt}
+\renewcommand{\arraystretch}{1.16}
+\begin{tabularx}{\textwidth}{@{}>{\centering\arraybackslash}m{0.43\textwidth}>{\centering\arraybackslash}m{0.17\textwidth}>{\centering\arraybackslash}X>{\centering\arraybackslash}X@{}}
+\toprule
+Input representation & Train-CV & Primary test & Secondary test \\
+\midrule
+Training median & -- & 168.57 & 400.83 \\
+Raw/SOH & 92.76 & 96.84 & 350.12 \\
+Raw/SOH + Global DeltaQ & 57.43 & 52.68 & 151.90 \\
+Raw/SOH + selected Local DeltaQ & 51.36 & 40.12 & 70.84 \\
+Complete representation & 49.76 & 38.23 & 64.15 \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+Table~\ref{tab:representation_comparison} shows a progressive reduction in prediction error as curve-derived information was added to the Raw/SOH baseline. Global DeltaQ descriptors provided the first substantial improvement, particularly for the secondary test cohort, where the MAE decreased from 350.12 to 151.90 cycles. Adding selected Local DeltaQ descriptors further reduced the secondary-test MAE to 70.84 cycles, indicating that localized discharge-curve changes contributed information beyond whole-curve summaries. The complete representation achieved the lowest MAEs, 38.23 cycles on the primary test and 64.15 cycles on the secondary test, with the smaller gain over the selected-Local-DeltaQ representation suggesting that the retained localized descriptors accounted for most of the improvement.
+
+% \begin{figure}[!ht]
+% \centering
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure6a.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure6b.png}
+% \end{minipage}
+
+% \vspace{0.35em}
+
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure6c.png}
+% \end{minipage}\hfill%
+% \begin{minipage}[t]{0.48\textwidth}
+%   \vspace{0pt}\centering
+%   \includegraphics[width=\linewidth]{Figure6d.png}
+% \end{minipage}
+
+% \caption{Early-observation performance on the common $y_i>150$ 41/42/40 cohort. (a) Training-only repeated-CV MAE. (b) Test-cohort MAE with 95\% cell-bootstrap intervals. (c) Changes in MAE relative to the 50-cycle configuration. (d) Cell-level q90 absolute error.}
+% \label{fig:budget_learning}
+% \end{figure}
+
+\begin{figure}[!ht] 
+\centering 
+\includegraphics[width=\textwidth]{Figure6.png} 
+\caption{Early-observation performance on the common $y_i>150$ 41/42/40 cohort. (a) Training-only repeated-CV MAE. (b) Test-cohort MAE with 95\% cell-bootstrap intervals. (c) Changes in MAE relative to the 50-cycle configuration. (d) Cell-level q90 absolute error.} 
+\label{fig:observation_budget} 
 \end{figure}
 
-The regional controls clarify why spatial coverage can be useful. The 0.525--0.650 core recurred across folds and strongly affected the dependence-breaking permutation test. However, core-only, core-excluded, and selected-minus-core variants achieved similar mean accuracy. This pattern is consistent with smooth curve changes appearing in several overlapping windows. Region balancing limits feature concentration while retaining alternative descriptors of those changes. Restricted differential-voltage regions can reflect electrode inhomogeneity \cite{fuhrmann2024dva}. Incremental-capacity and capacity-gradient features can also distinguish degradation stages \cite{wang2024capacity}. These studies motivate localized analysis, but they do not identify a mechanism for the normalized regions used here.
+We next assessed the trade-off between prediction earliness and accuracy by comparing observation budgets of 50, 100, and 150 cycles on the common eligibility-controlled 41/42/40 cohorts. At each horizon, the LDQ-ET representation was reconstructed using only measurements available up to that cycle, and all data-dependent selection steps were repeated within the corresponding training splits. Performance was summarized using repeated-CV MAE, held-out MAE with 95\% cell-bootstrap confidence intervals, changes in held-out MAE relative to the 50-cycle configuration, and q90-AE.
+
+Figure~\ref{fig:observation_budget}a indicates that the training-only repeated-CV MAE decreased steadily as the observation window increased, reaching 49.76 cycles at 150 cycles. A similar trend is evident in Figure~\ref{fig:observation_budget}b for the held-out cohorts, where the primary-cohort MAE declined to 38.23 cycles and the secondary-cohort MAE decreased to 64.15 cycles at the longest window. Figure~\ref{fig:observation_budget}c quantifies these improvements relative to the 50-cycle configuration, corresponding to reductions of approximately 14 and 18 cycles, respectively. Figure~\ref{fig:observation_budget}d further illustrates that q90-AE decreased progressively with additional observations, reaching 95.50 cycles for the primary cohort and 153.15 cycles for the secondary cohort at 150 cycles.
+
+Taken together, these results indicate a consistent trade-off between prediction earliness and accuracy. Extending the observation window from 50 to 150 cycles improved both average and upper-tail accuracy in the development evaluation and the two held-out cohorts. Accordingly, the 150-cycle observation budget was adopted for the final LDQ-ET model, as it yielded the lowest repeated-CV MAE and the lowest held-out MAE and q90-AE in both cohorts. Nevertheless, the 50-cycle configuration retained substantial predictive information, suggesting that the framework can support earlier screening when prediction lead time is prioritized over maximum accuracy. 
+
+\FloatBarrier
+\subsection{Uncertainty Calibration and Target-Definition Sensitivity}
+\label{subsec:robustness}
+
+To further evaluate the robustness of the LDQ-ET framework, we examined prediction-interval calibration under batch shift and the sensitivity of predictive performance to alternative knee-label definitions. Prediction-interval coverage was evaluated on the primary and secondary cohorts, while the piecewise-linear, chord-distance, and degradation-rate-threshold definitions were compared on their common eligible cohort.
+
+\begin{figure}[!ht] 
+\centering 
+\includegraphics[width=\textwidth]{Figure7.png} 
+\caption{Reliability and target-definition sensitivity. (a) Empirical coverage of the training-OOF-calibrated nominal 90\% prediction interval. (b) MAE under three automatic knee-label definitions on their common eligible cohort. Error bars show 95\% cell-bootstrap intervals.} 
+\label{fig:reliability_sensitivity} 
+\end{figure}
+
+Figure~\ref{fig:reliability_sensitivity}a shows that the training-calibrated prediction interval achieved an empirical coverage of 0.95 on the primary cohort and 0.85 on the secondary cohort. The primary-cohort coverage remained close to the nominal level, whereas the moderate decrease on the secondary cohort indicates that the residual-based calibration transferred less completely under batch shift. This pattern is consistent with the broader secondary-cohort error distribution observed in the point-prediction results. Nevertheless, the interval continued to cover most secondary-cohort cells, indicating that the uncertainty information derived from the training residuals remained informative after cross-batch transfer. The error bars in Figure~\ref{fig:reliability_sensitivity}a denote 95\% Wilson confidence intervals for the empirical coverage estimates.
+
+Figure~\ref{fig:reliability_sensitivity}b compares the held-out MAEs obtained under the three knee-label definitions. The piecewise-linear and chord-distance definitions produced similar errors on both cohorts, with strongly overlapping cell-bootstrap confidence intervals. Their agreement indicates that the predictive results were relatively stable across these two closely related geometric descriptions of the degradation transition. In contrast, the degradation-rate-threshold definition resulted in higher MAEs, with the increase being particularly pronounced on the secondary cohort. This pattern suggests that the degradation-rate-threshold rule defines a more challenging prediction target than the two geometry-based alternatives.
+
+Together, these results show that LDQ-ET is comparatively stable across the two geometry-based knee definitions, whereas the degradation-rate-threshold label defines a more difficult early-prediction target. The lower interval coverage in the secondary cohort further indicates that uncertainty calibration transfers less completely under batch shift. Distribution shift and substantive changes in target construction therefore remain important sources of uncertainty in early knee-cycle prediction.
 
 \FloatBarrier
 
-\subsection{Reliability of the frozen predictor}\label{subsec:robustness}
+\section{Conclusion}
+\label{sec:conclusion}
 
-Across 30 prespecified seeds, the frozen point predictor had an MAE standard deviation of 0.75 cycles and an $R^2$ standard deviation of 0.0035. Algorithmic variation was therefore small conditional on the fixed secondary batch. This stability did not remove cell-level tail risk. The median secondary-batch absolute error was 43.82 cycles, whereas the q90 and q95 errors reached 190.61 and 265.12 cycles, respectively.
+This study presented a rigorous, reproducible pipeline for early battery degradation prediction, systematically comparing representation design, regressor selection, observation budgets, and target sensitivity under strict cohort isolation. On the frozen evaluation protocol, the finalized pipeline achieved MAEs of 38.23 cycles on the independent same-batch primary-test cohort and 64.15 cycles on the secondary-batch test cohort. Independently developed representation comparisons confirmed that inputs incorporating selected Local $\Delta Q$ descriptors retained substantially lower cross-batch error than Raw/SOH or Raw/SOH + Global $\Delta Q$ alternatives.
 
-A nominal 90\% constant-width residual interval was calibrated from cross-fitted development residuals. The resulting half-width was 105.33 cycles, but empirical secondary-batch coverage was 77.5\%. Coverage was 84.6\% in both the early- and mid-knee strata and 64.3\% in the late-knee stratum. These intervals are empirical because cross-fitted residuals and batch shift do not provide an exact split-conformal guarantee \cite{javanmardi2023conformal}. The stratum-specific undercoverage identifies late-knee cells and batch-aware recalibration as the principal uncertainty targets.
+Across the evaluated regressors, ExtraTrees consistently provided the lowest development, primary-test, and secondary-batch errors. Increasing the observation budget from 50 to 150 cycles progressively improved point accuracy and reduced tail errors ($q_{90}$) across cohorts, reaching optimal performance at the 150-cycle setting. Sensitivity analyses on the degradation-rate-threshold further emphasized that predictive accuracy remains conditional on target definitions.
 
-A separate label audit compared the piecewise-linear knee definition with a Kneedle-derived alternative. The labels retained near-identical rank ordering across eligible cells (Spearman correlation 0.998). However, their mean absolute difference was 32.85 cycles. Ranking was therefore robust, but absolute errors remained conditional on the offline target definition. A multi-label nested retraining study is needed to quantify target-definition robustness.
-
-The frozen model required a mean 0.79~s to fit and 2.65~ms per cell for batch inference. Its mean serialized size was 5.02~MB. Figure~\ref{fig:uncertainty_tail} summarizes interval coverage, the secondary-batch error tail, the most difficult cells, and model complexity. The readout is computationally lightweight, while calibration and tail-cell reliability remain the dominant practical constraints.
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=\textwidth]{figures/fig7_uncertainty_tail_and_complexity.pdf}
-\caption{Uncertainty, tail risk, and complexity. (a) Empirical coverage of a development-calibrated nominal 90\% residual interval. (b) External absolute-error empirical distribution with q90 and q95. (c) Ten largest cell-level errors. (d) Mean fit time, inference time, and serialized model size over 30 seeds.}
-\label{fig:uncertainty_tail}
-\end{figure}
-
-\noindent\textit{Implications for model use.}
-
-The main contribution is a reproducible workflow for selecting localized early-degradation information in a small battery cohort. Region-balanced selection did not significantly outperform every alternative in mean absolute error. Instead, it combined competitive accuracy with the lowest fold-to-fold MAE variation and explicit spatial coverage. The frozen predictor also showed little seed-to-seed variation on the secondary batch. Its value therefore lies in joining structured Local DeltaQ features, fold-safe selection, and a lightweight nonlinear readout within one auditable protocol.
-
-The secondary-batch evaluation separates point-prediction reproducibility from predictive reliability. Low seed variation indicates stable fitting after the protocol is frozen. By contrast, the larger secondary-batch error and late-knee undercoverage reveal sensitivity to population shift. For this dataset, batch-aware calibration is therefore a more immediate priority than increasing readout complexity. Domain-generalization methods may provide one route when several source domains are available \cite{tan2024magnet,li2024varying}. History-free degradation-stage assessment offers a complementary route for identifying regime changes before regression \cite{zhao2024historyfree}.
-
-The measured fit time, inference time, and serialized size support lightweight deployment of the trained readout. They do not establish end-to-end online readiness. The present inputs require consistently sampled discharge curves and deterministic feature extraction on a common voltage grid. Robustness to sensor noise, missing voltage regions, partial discharge, and onboard preprocessing remains to be tested.
-
-\section{Conclusion}\label{sec:conclusion}
-
-This study presents a region-balanced LDQ-ET framework for reproducible early knee-point prediction from localized discharge-curve changes. By combining fold-safe region selection with a lightweight ExtraTrees readout, the N150 model achieved a development MAE of $43.01\pm5.43$ cycles. It also showed the lowest fold-to-fold error variability among the evaluated selectors. The protocol-frozen pipeline maintained a secondary-batch MAE of $76.59\pm0.75$ cycles across 30 prespecified seeds. Regional controls showed that predictive Local DeltaQ information was distributed across overlapping windows, providing a practical design rule for small-cohort feature construction.
-
-The evidence is limited to one fast-charging LFP dataset, laboratory measurements, and 83 development cells. The secondary batch did not influence the frozen LDQ-ET pipeline, but it belongs to the same public study. It was also inspected during earlier project exploration. Accordingly, the evaluation represents a protocol-frozen batch-shift stress test rather than independent external validation.
-
-Absolute errors remained conditional on the offline knee definition, despite strong rank agreement between the two audited labels. The permutation analysis establishes predictive reliance under a dependence-breaking perturbation, not causal or electrochemical specificity. Mechanistic assignment to selected regions therefore requires electrochemically controlled experiments or post-mortem measurements.
-
-Future validation should combine independent cohorts, multiple knee definitions, and dedicated calibration data. It should span chemistries, temperatures, form factors, laboratories, and realistic battery-management-system noise. These tests would determine whether region-balanced selection remains stable and whether uncertainty coverage can be recovered under genuine domain shift. Within these boundaries, the study provides a transparent point-prediction workflow and defines the principal requirements for broader battery-management use.
+Beyond the performance gains summarized above, the results also identify two practical limitations that motivate further development. First, performance degraded under secondary-batch evaluation, indicating that the current feature representation remains sensitive to batch-to-batch manufacturing and testing shifts. Second, the framework relies on fixed early-cycle observation budgets of 50--150 cycles, which may constrain real-time applicability when continuous early-life data are incomplete. Future work will therefore investigate domain-adaptation methods to mitigate cross-batch distribution shifts and develop dynamic observation models that remain effective with incomplete operational data.
 
 \backmatter
 
-\section*{Acknowledgements}
-
-The authors thank the providers of the public Severson/MIT--Stanford battery dataset.
-
 \section*{Declarations}
 
-\textbf{Funding} Funding information will be added before submission.
+\noindent\textbf{Authors' contributions} Chang Liu contributed to Conceptualization, Investigation, Methodology, Software, Validation, Visualization, and Writing---original draft. Congyan Chen contributed to Formal analysis, Funding acquisition, Project administration, Supervision, Validation, and Writing---review and editing.
 
-\textbf{Competing interests} The authors declare no competing interests.
+\noindent\textbf{Funding} This work was supported by the Guangdong Basic and Applied Basic Research Foundation (Grant No.~2024A1515011962).
 
-\textbf{Ethics approval and consent to participate} Not applicable.
+\noindent\textbf{Data availability} Data will be made available on request.
 
-\textbf{Consent for publication} Not applicable.
-
-\textbf{Data availability} The data analyzed in this study are derived from the publicly available Severson/MIT--Stanford lithium-ion battery fast-charging dataset reported by Severson et al. \cite{severson2019data}. The processed labels, official split definitions, and feature tables generated for the present analysis can be made available upon reasonable request and will be deposited with the analysis code when a public repository is finalized.
-
-\textbf{Materials availability} Not applicable.
-
-\textbf{Code availability} The analysis code includes scripts for SOH correction, knee-label generation, Local DeltaQ feature extraction, model training, ablation analysis, and manuscript figure generation. The code can be made available upon reasonable request, and a public repository will be prepared before submission or during revision if required by the journal.
-
-\textbf{Author contribution} Author contributions will be completed after the author list is finalized.
+\noindent\textbf{Competing interests} The authors declare no competing interests.
 
 \setlength{\bibsep}{0pt}
 \bibliography{references}

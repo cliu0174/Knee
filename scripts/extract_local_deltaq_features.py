@@ -60,7 +60,7 @@ def segment_stats(prefix: str, values: np.ndarray) -> dict[str, float]:
     return {
         f"{prefix}_mean": float(np.mean(clean)),
         f"{prefix}_std": float(np.std(clean, ddof=1)) if clean.size > 1 else 0.0,
-        f"{prefix}_var": float(np.var(clean)),
+        f"{prefix}_var": float(np.var(clean, ddof=0)),
         f"{prefix}_abs_mean": float(np.mean(np.abs(clean))),
         f"{prefix}_min": float(np.min(clean)),
         f"{prefix}_max": float(np.max(clean)),

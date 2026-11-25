@@ -34,14 +34,6 @@ REGION_RE = re.compile(
     r"_ldq_seg(?P<seg>\d+)_(?P<start>\d{4})_(?P<stop>\d{4})_(?P<descriptor>.+)$"
 )
 
-METHOD_COMPLEXITY_PENALTY = {
-    "pearson": 0.0,
-    "bootstrap_stable": 0.25,
-    "region_balanced": 0.50,
-    "contiguous": 0.75,
-    "mrmr": 0.50,
-}
-
 MODEL_GRID = [
     {
         "model_id": "et_compact",
@@ -149,8 +141,8 @@ def bootstrap_scores(
         counts[chosen] += 1.0
     frequency = counts / max(int(repeats), 1)
     mean_corr = corr_sum / max(int(repeats), 1)
-    corr_scale = np.max(mean_corr)
-    corr_norm = mean_corr / corr_scale if corr_scale > 0 else mean_corr
+    corr_scale = max(float(np.max(mean_corr)), 1e-12)
+    corr_norm = mean_corr / corr_scale
     combined = frequency + 0.25 * corr_norm
     return frequency, mean_corr, combined
 
@@ -207,32 +199,59 @@ def fit_selector(
     seed: int,
 ) -> SelectorResult:
     values, _ = safe_numeric_matrix(train, local_cols)
-    top_k = min(int(config["top_k"]), len(local_cols))
+    variance = np.var(values, axis=0)
+    eligible = np.isfinite(variance) & (variance > 0.0)
+    eligible_indices = np.flatnonzero(eligible).tolist()
+    top_k = int(config["top_k"])
+    if len(eligible_indices) < top_k:
+        raise RuntimeError(
+            f"Only {len(eligible_indices)} non-zero-variance candidates remain after "
+            f"training-fold imputation, fewer than top_k={top_k}"
+        )
+
+    def eligible_order(scores: np.ndarray, excluded: set[int] | None = None) -> list[int]:
+        blocked = excluded or set()
+        return sorted(
+            (idx for idx in eligible_indices if idx not in blocked),
+            key=lambda idx: (-float(scores[idx]), local_cols[idx]),
+        )
+
     relevance = abs_corr_vector(values, y)
+    relevance[~eligible] = 0.0
     frequencies = np.full(len(local_cols), np.nan)
     mean_corr = relevance.copy()
     combined = relevance.copy()
 
     if method in {"bootstrap_stable", "region_balanced", "contiguous"}:
-        frequencies, mean_corr, combined = bootstrap_scores(
-            values,
+        eligible_names = [local_cols[idx] for idx in eligible_indices]
+        eligible_frequency, eligible_mean_corr, eligible_combined = bootstrap_scores(
+            values[:, eligible],
             y,
-            local_cols,
+            eligible_names,
             top_k=top_k,
             repeats=int(config["bootstrap_repeats"]),
             seed=seed,
         )
+        frequencies = np.zeros(len(local_cols), dtype=float)
+        mean_corr = np.zeros(len(local_cols), dtype=float)
+        combined = np.zeros(len(local_cols), dtype=float)
+        frequencies[eligible] = eligible_frequency
+        mean_corr[eligible] = eligible_mean_corr
+        combined[eligible] = eligible_combined
 
-    metadata: dict[str, Any] = {}
+    metadata: dict[str, Any] = {
+        "eligible_candidate_count": len(eligible_indices),
+        "excluded_zero_variance_count": int(np.sum(~eligible)),
+    }
     if method == "pearson":
-        selected_indices = deterministic_order(relevance, local_cols)[:top_k]
+        selected_indices = eligible_order(relevance)[:top_k]
     elif method == "bootstrap_stable":
-        selected_indices = deterministic_order(combined, local_cols)[:top_k]
+        selected_indices = eligible_order(combined)[:top_k]
     elif method == "region_balanced":
         selected_indices = []
         per_region: dict[int, int] = {}
         cap = int(config["max_per_region"])
-        for idx in deterministic_order(combined, local_cols):
+        for idx in eligible_order(combined):
             region = parse_region(local_cols[idx])
             seg = int(region["seg"]) if region else -1
             if per_region.get(seg, 0) >= cap:
@@ -242,16 +261,16 @@ def fit_selector(
             if len(selected_indices) == top_k:
                 break
         if len(selected_indices) < top_k:
-            for idx in deterministic_order(combined, local_cols):
-                if idx not in selected_indices:
-                    selected_indices.append(idx)
-                if len(selected_indices) == top_k:
-                    break
+            raise RuntimeError(
+                f"The per-group cap c={cap} admits only {len(selected_indices)} eligible "
+                f"candidates, fewer than top_k={top_k}"
+            )
         metadata["selected_region_count"] = len(per_region)
     elif method == "contiguous":
         region_to_indices: dict[int, list[int]] = {}
         region_bounds: dict[int, tuple[float, float]] = {}
-        for idx, feature in enumerate(local_cols):
+        for idx in eligible_indices:
+            feature = local_cols[idx]
             region = parse_region(feature)
             if region is None:
                 continue
@@ -275,7 +294,8 @@ def fit_selector(
         inside = [idx for seg in band_segments for idx in region_to_indices[seg]]
         outside = [
             idx
-            for idx, feature in enumerate(local_cols)
+            for idx in eligible_indices
+            for feature in [local_cols[idx]]
             if (parse_region(feature) is None or int(parse_region(feature)["seg"]) not in band_set)
         ]
         core_count = min(len(inside), int(round(top_k * float(config["core_fraction"]))))
@@ -309,13 +329,13 @@ def fit_selector(
         corr = np.abs(np.corrcoef(standardized, rowvar=False))
         corr[~np.isfinite(corr)] = 0.0
         np.fill_diagonal(corr, 0.0)
-        selected_indices = [deterministic_order(relevance, local_cols)[0]]
+        selected_indices = [eligible_order(relevance)[0]]
         penalty = float(config["redundancy_penalty"])
         while len(selected_indices) < top_k:
             redundancy = np.mean(corr[:, selected_indices], axis=1)
             score = relevance - penalty * redundancy
             score[selected_indices] = -np.inf
-            next_idx = deterministic_order(score, local_cols)[0]
+            next_idx = eligible_order(score, set(selected_indices))[0]
             selected_indices.append(next_idx)
     else:  # pragma: no cover
         raise ValueError(method)
@@ -327,6 +347,7 @@ def fit_selector(
         rows.append(
             {
                 "feature": feature,
+                "eligible": bool(eligible[idx]),
                 "selected": feature in selected,
                 "relevance_abs_corr": float(relevance[idx]),
                 "bootstrap_frequency": float(frequencies[idx]) if np.isfinite(frequencies[idx]) else np.nan,
@@ -430,11 +451,7 @@ def inner_score(
         maes.append(float(mean_absolute_error(y[va], pred)))
         rmses.append(float(mean_squared_error(y[va], pred) ** 0.5))
     feature_penalty = 0.01 * float(selector_config["top_k"])
-    complexity = (
-        METHOD_COMPLEXITY_PENALTY[method]
-        + float(model_config["complexity_penalty"])
-        + feature_penalty
-    )
+    complexity = float(model_config["complexity_penalty"]) + feature_penalty
     return {
         "inner_mae_mean": float(np.mean(maes)),
         "inner_mae_std": float(np.std(maes)),
@@ -710,12 +727,10 @@ def run_develop(args: argparse.Namespace) -> None:
             model_bytes_mean=("model_bytes", "mean"),
         )
     )
-    summary["method_complexity_penalty"] = summary["method"].map(METHOD_COMPLEXITY_PENALTY)
     summary["development_selection_score"] = (
         summary["outer_mae_mean"]
         + 0.10 * summary["outer_mae_std"]
         + 0.10 * summary["outer_mae_max"]
-        + summary["method_complexity_penalty"]
     )
     summary = summary.sort_values(["development_selection_score", "outer_mae_mean"]).reset_index(drop=True)
     selected_method = str(summary.iloc[0]["method"])
@@ -749,9 +764,8 @@ def run_develop(args: argparse.Namespace) -> None:
         "inner_repeats": args.inner_repeats,
         "bootstrap_repeats": args.bootstrap_repeats,
         "random_state": args.random_state,
-        "predeclared_method_complexity_penalty": METHOD_COMPLEXITY_PENALTY,
         "predeclared_model_grid": model_grid,
-        "predeclared_score": "mean_outer_MAE + 0.10*std_outer_MAE + 0.10*worst_outer_MAE + method_complexity_penalty",
+        "predeclared_score": "mean_outer_MAE + 0.10*std_outer_MAE + 0.10*worst_outer_MAE",
         "selected_method_by_development": selected_method,
         "secondary_labels_read_for_selection": False,
         "software_versions": software_versions(),
